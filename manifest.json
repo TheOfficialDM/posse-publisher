@@ -1,0 +1,9 @@
+{
+  "id": "publish-blog-to-web",
+  "name": "Publish Blog to Web",
+  "version": "1.0.0",
+  "minAppVersion": "1.0.0",
+  "description": "Publish notes directly to your website's blog",
+  "author": "Devin Marshall",
+  "isDesktopOnly": false
+}
