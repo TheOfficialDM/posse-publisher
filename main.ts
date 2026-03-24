@@ -1,19 +1,46 @@
-import { Plugin, PluginSettingTab, App, Setting, Notice, requestUrl, MarkdownView, Modal, SuggestModal } from "obsidian";
+import {
+  Plugin,
+  PluginSettingTab,
+  App,
+  Setting,
+  Notice,
+  requestUrl,
+  MarkdownView,
+  Modal,
+  SuggestModal,
+  TFile,
+} from "obsidian";
 
-interface Site {
+type DestinationType = "custom-api" | "devto" | "mastodon" | "bluesky";
+
+interface Destination {
   name: string;
+  type: DestinationType;
+  // custom-api
   url: string;
   apiKey: string;
+  // mastodon
+  instanceUrl?: string;
+  accessToken?: string;
+  // bluesky
+  handle?: string;
+  appPassword?: string;
 }
 
-interface PublishBlogToWebSettings {
-  sites: Site[];
+interface PossePublisherSettings {
+  destinations: Destination[];
+  canonicalBaseUrl: string;
   defaultStatus: "draft" | "published";
+  confirmBeforePublish: boolean;
+  stripObsidianSyntax: boolean;
 }
 
-const DEFAULT_SETTINGS: PublishBlogToWebSettings = {
-  sites: [],
+const DEFAULT_SETTINGS: PossePublisherSettings = {
+  destinations: [],
+  canonicalBaseUrl: "",
   defaultStatus: "draft",
+  confirmBeforePublish: true,
+  stripObsidianSyntax: true,
 };
 
 interface Frontmatter {
@@ -30,101 +57,204 @@ interface Frontmatter {
   metaDescription?: string;
   ogImage?: string;
   videoUrl?: string;
+  canonicalUrl?: string;
 }
 
-function parseFrontmatter(content: string): { frontmatter: Frontmatter; body: string } {
-  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
-  if (!match) return { frontmatter: {}, body: content };
+/** Extract body content below the YAML frontmatter fence. */
+function extractBody(content: string): string {
+  const match = content.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?([\s\S]*)$/);
+  return match ? match[1].trim() : content;
+}
 
+/**
+ * Build a Frontmatter object from Obsidian's cached metadata.
+ * Falls back gracefully when fields are absent.
+ */
+function buildFrontmatter(cache: Record<string, unknown> | undefined): Frontmatter {
+  if (!cache) return {};
   const fm: Frontmatter = {};
-  const lines = match[1].split("\n");
 
-  for (const line of lines) {
-    const colonIdx = line.indexOf(":");
-    if (colonIdx === -1) continue;
-    const key = line.slice(0, colonIdx).trim();
-    const value = line.slice(colonIdx + 1).trim();
+  if (typeof cache.title === "string") fm.title = cache.title;
+  if (typeof cache.slug === "string") fm.slug = cache.slug;
+  if (typeof cache.excerpt === "string") fm.excerpt = cache.excerpt;
+  if (typeof cache.type === "string") fm.type = cache.type;
+  if (typeof cache.status === "string") fm.status = cache.status;
+  if (typeof cache.pillar === "string") fm.pillar = cache.pillar;
+  if (typeof cache.coverImage === "string") fm.coverImage = cache.coverImage;
+  if (typeof cache.metaTitle === "string") fm.metaTitle = cache.metaTitle;
+  if (typeof cache.metaDescription === "string") fm.metaDescription = cache.metaDescription;
+  if (typeof cache.ogImage === "string") fm.ogImage = cache.ogImage;
+  if (typeof cache.videoUrl === "string") fm.videoUrl = cache.videoUrl;
 
-    switch (key) {
-      case "title": fm.title = value; break;
-      case "slug": fm.slug = value; break;
-      case "excerpt": fm.excerpt = value; break;
-      case "type": fm.type = value; break;
-      case "status": fm.status = value; break;
-      case "pillar": fm.pillar = value; break;
-      case "coverImage": fm.coverImage = value; break;
-      case "featured": fm.featured = value === "true"; break;
-      case "metaTitle": fm.metaTitle = value; break;
-      case "metaDescription": fm.metaDescription = value; break;
-      case "ogImage": fm.ogImage = value; break;
-      case "videoUrl": fm.videoUrl = value; break;
-      case "tags":
-        fm.tags = value
-          .replace(/^\[|\]$/g, "")
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean);
-        break;
-    }
+  if (typeof cache.featured === "boolean") fm.featured = cache.featured;
+  else if (cache.featured === "true") fm.featured = true;
+
+  if (Array.isArray(cache.tags)) {
+    fm.tags = cache.tags.map((t: unknown) => String(t).trim()).filter(Boolean);
+  } else if (typeof cache.tags === "string") {
+    fm.tags = cache.tags
+      .replace(/^\[|\]$/g, "")
+      .split(",")
+      .map((t: string) => t.trim())
+      .filter(Boolean);
   }
 
-  return { frontmatter: fm, body: match[2].trim() };
+  return fm;
 }
 
-function toSlug(title: string): string {
+/** Convert a title string to a URL-safe slug, handling diacritics. */
+export function toSlug(title: string): string {
   return title
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
 }
 
-export default class PublishBlogToWebPlugin extends Plugin {
-  settings: PublishBlogToWebSettings = DEFAULT_SETTINGS;
+/**
+ * Pre-process Obsidian-specific markdown before sending to the blog API.
+ * Strips wiki-links, embeds, comments, and dataview blocks.
+ */
+export function preprocessContent(body: string): string {
+  // Remove Obsidian comments: %%...%%
+  body = body.replace(/%%[\s\S]*?%%/g, "");
+
+  // Convert wiki-link embeds: ![[file]] → (removed)
+  body = body.replace(/!\[\[([^\]]+)\]\]/g, "");
+
+  // Convert wiki-links with alias: [[target|alias]] → alias
+  body = body.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, "$2");
+
+  // Convert wiki-links without alias: [[target]] → target
+  body = body.replace(/\[\[([^\]]+)\]\]/g, "$1");
+
+  // Remove dataview code blocks
+  body = body.replace(/```dataview[\s\S]*?```/g, "");
+  body = body.replace(/```dataviewjs[\s\S]*?```/g, "");
+
+  // Clean up excess blank lines left by removals
+  body = body.replace(/\n{3,}/g, "\n\n");
+
+  return body.trim();
+}
+
+const FRONTMATTER_TEMPLATE = `---
+title: 
+slug: 
+excerpt: 
+type: blog
+status: draft
+tags: []
+pillar: 
+coverImage: 
+featured: false
+metaTitle: 
+metaDescription: 
+ogImage: 
+videoUrl: 
+canonicalUrl: 
+syndication: []
+---
+
+`;
+
+export default class PossePublisherPlugin extends Plugin {
+  settings: PossePublisherSettings = DEFAULT_SETTINGS;
+  private statusBarEl: HTMLElement | null = null;
 
   async onload() {
     await this.loadSettings();
     this.migrateSettings();
 
+    this.statusBarEl = this.addStatusBarItem();
+
+    this.addRibbonIcon("send", "POSSE Publish", () => {
+      this.pickSiteAndPublish();
+    });
+
     this.addCommand({
-      id: "publish-to-blog",
-      name: "Publish to Blog",
+      id: "posse-publish",
+      name: "POSSE Publish",
       callback: () => this.pickSiteAndPublish(),
     });
 
     this.addCommand({
-      id: "publish-draft",
-      name: "Publish as Draft",
+      id: "posse-publish-draft",
+      name: "POSSE Publish as Draft",
       callback: () => this.pickSiteAndPublish("draft"),
     });
 
     this.addCommand({
-      id: "publish-live",
-      name: "Publish Live",
+      id: "posse-publish-live",
+      name: "POSSE Publish Live",
       callback: () => this.pickSiteAndPublish("published"),
     });
 
-    this.addSettingTab(new PublishBlogToWebSettingTab(this.app, this));
+    this.addCommand({
+      id: "posse-insert-template",
+      name: "POSSE Insert Frontmatter Template",
+      editorCallback: (editor) => {
+        const content = editor.getValue();
+        if (content.trimStart().startsWith("---")) {
+          new Notice("Frontmatter already exists in this note");
+          return;
+        }
+        editor.setCursor(0, 0);
+        editor.replaceRange(FRONTMATTER_TEMPLATE, { line: 0, ch: 0 });
+        // Place cursor on the title line
+        editor.setCursor(1, 7);
+      },
+    });
+
+    this.addCommand({
+      id: "posse-to-all",
+      name: "POSSE to All Destinations",
+      callback: () => this.posseToAll(),
+    });
+
+    this.addCommand({
+      id: "posse-status",
+      name: "POSSE Status — View Syndication",
+      callback: () => this.posseStatus(),
+    });
+
+    this.addSettingTab(new PossePublisherSettingTab(this.app, this));
+  }
+
+  onunload() {
+    this.statusBarEl = null;
   }
 
   /** Migrate from single-site settings (v1) to multi-site (v2) */
   private migrateSettings() {
-    const raw = this.settings as Record<string, unknown>;
+    const raw = this.settings as unknown as Record<string, unknown>;
+    // Migrate v1 single-site format
     if (typeof raw.siteUrl === "string" && raw.siteUrl) {
-      this.settings.sites = [{
-        name: "Default",
-        url: raw.siteUrl as string,
-        apiKey: (raw.apiKey as string) || "",
-      }];
+      this.settings.destinations = [
+        {
+          name: "Default",
+          type: "custom-api" as DestinationType,
+          url: raw.siteUrl as string,
+          apiKey: (raw.apiKey as string) || "",
+        },
+      ];
       delete raw.siteUrl;
       delete raw.apiKey;
+      this.saveSettings();
+    }
+    // Migrate sites → destinations key
+    if (Array.isArray(raw.sites) && !Array.isArray(this.settings.destinations)) {
+      this.settings.destinations = raw.sites as Destination[];
+      delete raw.sites;
       this.saveSettings();
     }
   }
 
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-    if (!Array.isArray(this.settings.sites)) {
-      this.settings.sites = [];
+    if (!Array.isArray(this.settings.destinations)) {
+      this.settings.destinations = [];
     }
   }
 
@@ -133,46 +263,58 @@ export default class PublishBlogToWebPlugin extends Plugin {
   }
 
   private pickSiteAndPublish(overrideStatus?: "draft" | "published") {
-    const { sites } = this.settings;
-    if (sites.length === 0) {
-      new Notice("Add at least one site in plugin settings");
+    const { destinations } = this.settings;
+    if (destinations.length === 0) {
+      new Notice("Add at least one destination in POSSE Publisher settings");
       return;
     }
-    if (sites.length === 1) {
-      this.publish(sites[0], overrideStatus);
+    if (destinations.length === 1) {
+      this.preparePublish(destinations[0], overrideStatus);
       return;
     }
-    // Multiple sites — show picker
-    new SitePickerModal(this.app, sites, (site) => {
-      this.publish(site, overrideStatus);
+    new SitePickerModal(this.app, destinations, (dest) => {
+      this.preparePublish(dest, overrideStatus);
     }).open();
   }
 
-  async publish(site: Site, overrideStatus?: "draft" | "published") {
+  private async preparePublish(destination: Destination, overrideStatus?: "draft" | "published") {
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-    if (!view) {
+    if (!view || !view.file) {
       new Notice("Open a markdown file first");
       return;
     }
 
-    if (!site.url || !site.apiKey) {
-      new Notice(`Configure URL and API key for "${site.name}" in plugin settings`);
+    if (!this.hasValidCredentials(destination)) {
+      new Notice(`Configure credentials for "${destination.name}" in POSSE Publisher settings`);
       return;
     }
 
-    const content = view.getViewData();
-    const { frontmatter, body } = parseFrontmatter(content);
+    // Read from vault cache — works in both edit and reading modes
+    const content = await this.app.vault.cachedRead(view.file);
+    const fileCache = this.app.metadataCache.getFileCache(view.file);
+    const frontmatter = buildFrontmatter(fileCache?.frontmatter);
 
-    const title = frontmatter.title || view.file?.basename || "Untitled";
+    const body = extractBody(content);
+    const processedBody = this.settings.stripObsidianSyntax
+      ? preprocessContent(body)
+      : body;
+
+    const title = frontmatter.title || view.file.basename || "Untitled";
     const slug = frontmatter.slug || toSlug(title);
     const status = overrideStatus || frontmatter.status || this.settings.defaultStatus;
+    const postType = frontmatter.type || "blog";
+
+    // Generate canonical URL if base URL is configured
+    const canonicalUrl = this.settings.canonicalBaseUrl
+      ? `${this.settings.canonicalBaseUrl.replace(/\/$/, "")}/${postType}/${slug}`
+      : "";
 
     const payload = {
       title,
       slug,
-      body,
+      body: processedBody,
       excerpt: frontmatter.excerpt || "",
-      type: frontmatter.type || "blog",
+      type: postType,
       status,
       tags: frontmatter.tags || [],
       pillar: frontmatter.pillar || "",
@@ -182,66 +324,428 @@ export default class PublishBlogToWebPlugin extends Plugin {
       metaDescription: frontmatter.metaDescription || "",
       ogImage: frontmatter.ogImage || "",
       videoUrl: frontmatter.videoUrl || "",
+      ...(canonicalUrl && { canonicalUrl }),
     };
 
-    try {
-      new Notice(`Publishing "${title}" → ${site.name}...`);
+    if (this.settings.confirmBeforePublish) {
+      new ConfirmPublishModal(this.app, payload, destination, () => {
+        this.publishToDestination(destination, payload, view.file!);
+      }).open();
+    } else {
+      this.publishToDestination(destination, payload, view.file);
+    }
+  }
 
-      const url = `${site.url.replace(/\/$/, "")}/api/publish`;
+  /** Route a publish to the correct platform handler. */
+  private async publishToDestination(
+    destination: Destination,
+    payload: Record<string, unknown>,
+    file: TFile,
+  ) {
+    switch (destination.type) {
+      case "devto":
+        return this.publishToDevTo(destination, payload, file);
+      case "mastodon":
+        return this.publishToMastodon(destination, payload, file);
+      case "bluesky":
+        return this.publishToBluesky(destination, payload, file);
+      default:
+        return this.publishToCustomApi(destination, payload, file);
+    }
+  }
+
+  /** Publish to a custom /api/publish endpoint. */
+  private async publishToCustomApi(
+    destination: Destination,
+    payload: Record<string, unknown>,
+    file: TFile,
+  ) {
+    const title = payload.title as string;
+    const status = payload.status as string;
+    try {
+      new Notice(`POSSEing "${title}" → ${destination.name}...`);
+      const url = `${destination.url.replace(/\/$/, "")}/api/publish`;
       const response = await requestUrl({
         url,
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-publish-key": site.apiKey,
+          "x-publish-key": destination.apiKey,
         },
         body: JSON.stringify(payload),
       });
-
       if (response.status >= 200 && response.status < 300) {
-        const verb = response.json?.upserted ? "Updated" : "Published";
-        new Notice(`${verb} "${title}" on ${site.name} as ${status}`);
+        let verb = "POSSEd";
+        try { if (response.json?.upserted) verb = "Updated"; } catch { /* non-JSON */ }
+        new Notice(`${verb} "${title}" on ${destination.name} as ${status}`);
+        this.showStatusBarSuccess(destination.name);
+        let syndicationUrl: string;
+        try {
+          syndicationUrl = response.json?.url ||
+            `${destination.url.replace(/\/$/, "")}/${payload.slug as string}`;
+        } catch {
+          syndicationUrl = `${destination.url.replace(/\/$/, "")}/${payload.slug as string}`;
+        }
+        await this.writeSyndication(file, destination.name, syndicationUrl);
       } else {
-        new Notice(`Publish to ${site.name} failed: ${response.json?.error || response.status}`);
+        let errorDetail: string;
+        try { errorDetail = response.json?.error || String(response.status); }
+        catch { errorDetail = String(response.status); }
+        new Notice(`POSSE to ${destination.name} failed: ${errorDetail}`);
       }
     } catch (err) {
-      new Notice(`Publish error (${site.name}): ${err instanceof Error ? err.message : "Unknown error"}`);
+      new Notice(`POSSE error (${destination.name}): ${err instanceof Error ? err.message : "Unknown error"}`);
     }
+  }
+
+  /** Publish to Dev.to via their articles API. */
+  private async publishToDevTo(
+    destination: Destination,
+    payload: Record<string, unknown>,
+    file: TFile,
+  ) {
+    const title = payload.title as string;
+    try {
+      new Notice(`POSSEing "${title}" → Dev.to (${destination.name})...`);
+      const tags = ((payload.tags as string[]) || [])
+        .slice(0, 4)
+        .map((t) => t.toLowerCase().replace(/[^a-z0-9]/g, ""));
+      const article: Record<string, unknown> = {
+        title,
+        body_markdown: payload.body as string,
+        published: payload.status === "published",
+        tags,
+        description: (payload.excerpt as string) || "",
+      };
+      if (payload.canonicalUrl) article.canonical_url = payload.canonicalUrl;
+      if (payload.coverImage) article.main_image = payload.coverImage;
+      const response = await requestUrl({
+        url: "https://dev.to/api/articles",
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "api-key": destination.apiKey,
+        },
+        body: JSON.stringify({ article }),
+      });
+      if (response.status >= 200 && response.status < 300) {
+        const articleUrl: string = response.json?.url || "https://dev.to";
+        new Notice(`POSSEd "${title}" to Dev.to`);
+        this.showStatusBarSuccess("Dev.to");
+        await this.writeSyndication(file, destination.name, articleUrl);
+      } else {
+        let errorDetail: string;
+        try { errorDetail = response.json?.error || String(response.status); }
+        catch { errorDetail = String(response.status); }
+        new Notice(`Dev.to POSSE failed: ${errorDetail}`);
+      }
+    } catch (err) {
+      new Notice(`Dev.to error: ${err instanceof Error ? err.message : "Unknown error"}`);
+    }
+  }
+
+  /** Publish to Mastodon by posting a status with the canonical link. */
+  private async publishToMastodon(
+    destination: Destination,
+    payload: Record<string, unknown>,
+    file: TFile,
+  ) {
+    const title = payload.title as string;
+    try {
+      new Notice(`POSSEing "${title}" → Mastodon (${destination.name})...`);
+      const excerpt = (payload.excerpt as string) || "";
+      const canonicalUrl = (payload.canonicalUrl as string) || "";
+      const statusText = [title, excerpt, canonicalUrl].filter(Boolean).join("\n\n");
+      const instanceUrl = (destination.instanceUrl || "").replace(/\/$/, "");
+      const response = await requestUrl({
+        url: `${instanceUrl}/api/v1/statuses`,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${destination.accessToken}`,
+        },
+        body: JSON.stringify({ status: statusText, visibility: "public" }),
+      });
+      if (response.status >= 200 && response.status < 300) {
+        const statusUrl: string = response.json?.url || instanceUrl;
+        new Notice(`POSSEd "${title}" to Mastodon`);
+        this.showStatusBarSuccess("Mastodon");
+        await this.writeSyndication(file, destination.name, statusUrl);
+      } else {
+        let errorDetail: string;
+        try { errorDetail = response.json?.error || String(response.status); }
+        catch { errorDetail = String(response.status); }
+        new Notice(`Mastodon POSSE failed: ${errorDetail}`);
+      }
+    } catch (err) {
+      new Notice(`Mastodon error: ${err instanceof Error ? err.message : "Unknown error"}`);
+    }
+  }
+
+  /** Publish to Bluesky via AT Protocol. */
+  private async publishToBluesky(
+    destination: Destination,
+    payload: Record<string, unknown>,
+    file: TFile,
+  ) {
+    const title = payload.title as string;
+    try {
+      new Notice(`POSSEing "${title}" → Bluesky (${destination.name})...`);
+
+      // Authenticate
+      const authResponse = await requestUrl({
+        url: "https://bsky.social/xrpc/com.atproto.server.createSession",
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          identifier: destination.handle,
+          password: destination.appPassword,
+        }),
+      });
+      if (authResponse.status < 200 || authResponse.status >= 300) {
+        new Notice(`Bluesky auth failed: ${authResponse.status}`);
+        return;
+      }
+      const { did, accessJwt } = authResponse.json as { did: string; accessJwt: string };
+
+      // Build post text (300 char limit)
+      const canonicalUrl = (payload.canonicalUrl as string) || "";
+      const excerpt = (payload.excerpt as string) || "";
+      const baseText = [title, excerpt].filter(Boolean).join(" — ");
+      const maxText = 300 - (canonicalUrl ? canonicalUrl.length + 1 : 0);
+      const text = (baseText.length > maxText
+        ? baseText.substring(0, maxText - 1) + "…"
+        : baseText
+      ) + (canonicalUrl ? ` ${canonicalUrl}` : "");
+
+      const postRecord: Record<string, unknown> = {
+        $type: "app.bsky.feed.post",
+        text,
+        createdAt: new Date().toISOString(),
+        langs: ["en"],
+      };
+      if (canonicalUrl) {
+        const urlStart = text.lastIndexOf(canonicalUrl);
+        postRecord.facets = [{
+          index: { byteStart: new TextEncoder().encode(text.substring(0, urlStart)).length,
+                   byteEnd:   new TextEncoder().encode(text.substring(0, urlStart + canonicalUrl.length)).length },
+          features: [{ $type: "app.bsky.richtext.facet#link", uri: canonicalUrl }],
+        }];
+      }
+
+      const createResponse = await requestUrl({
+        url: "https://bsky.social/xrpc/com.atproto.repo.createRecord",
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${accessJwt}`,
+        },
+        body: JSON.stringify({
+          repo: did,
+          collection: "app.bsky.feed.post",
+          record: postRecord,
+        }),
+      });
+      if (createResponse.status >= 200 && createResponse.status < 300) {
+        const uri: string = createResponse.json?.uri || "";
+        const postUrl = uri
+          ? `https://bsky.app/profile/${destination.handle}/post/${uri.split("/").pop()}`
+          : "https://bsky.app";
+        new Notice(`POSSEd "${title}" to Bluesky`);
+        this.showStatusBarSuccess("Bluesky");
+        await this.writeSyndication(file, destination.name, postUrl);
+      } else {
+        let errorDetail: string;
+        try { errorDetail = String(createResponse.json?.message || createResponse.status); }
+        catch { errorDetail = String(createResponse.status); }
+        new Notice(`Bluesky POSSE failed: ${errorDetail}`);
+      }
+    } catch (err) {
+      new Notice(`Bluesky error: ${err instanceof Error ? err.message : "Unknown error"}`);
+    }
+  }
+
+  /** POSSE to all configured destinations at once. */
+  private async posseToAll(overrideStatus?: "draft" | "published") {
+    const { destinations } = this.settings;
+    if (destinations.length === 0) {
+      new Notice("Add at least one destination in POSSE Publisher settings");
+      return;
+    }
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!view || !view.file) {
+      new Notice("Open a markdown file first");
+      return;
+    }
+    const content = await this.app.vault.cachedRead(view.file);
+    const fileCache = this.app.metadataCache.getFileCache(view.file);
+    const frontmatter = buildFrontmatter(fileCache?.frontmatter);
+    const body = extractBody(content);
+    const processedBody = this.settings.stripObsidianSyntax ? preprocessContent(body) : body;
+    const title = frontmatter.title || view.file.basename || "Untitled";
+    const slug = frontmatter.slug || toSlug(title);
+    const status = overrideStatus || frontmatter.status || this.settings.defaultStatus;
+    const postType = frontmatter.type || "blog";
+    const canonicalUrl = this.settings.canonicalBaseUrl
+      ? `${this.settings.canonicalBaseUrl.replace(/\/$/, "")}/${postType}/${slug}`
+      : "";
+    const payload: Record<string, unknown> = {
+      title, slug, body: processedBody,
+      excerpt: frontmatter.excerpt || "",
+      type: postType, status,
+      tags: frontmatter.tags || [],
+      pillar: frontmatter.pillar || "",
+      featured: frontmatter.featured || false,
+      coverImage: frontmatter.coverImage || "",
+      metaTitle: frontmatter.metaTitle || "",
+      metaDescription: frontmatter.metaDescription || "",
+      ogImage: frontmatter.ogImage || "",
+      videoUrl: frontmatter.videoUrl || "",
+      ...(canonicalUrl && { canonicalUrl }),
+    };
+    new Notice(`POSSEing "${title}" to ${destinations.length} destination(s)...`);
+    for (const dest of destinations) {
+      if (this.hasValidCredentials(dest)) {
+        await this.publishToDestination(dest, payload, view.file);
+      } else {
+        new Notice(`Skipping "${dest.name}" — credentials not configured`);
+      }
+    }
+  }
+
+  /** Check whether a destination has the required credentials configured. */
+  hasValidCredentials(dest: Destination): boolean {
+    switch (dest.type) {
+      case "devto":    return !!dest.apiKey;
+      case "mastodon": return !!(dest.instanceUrl && dest.accessToken);
+      case "bluesky":  return !!(dest.handle && dest.appPassword);
+      default:         return !!(dest.url && dest.apiKey);
+    }
+  }
+
+  /** Write a syndication entry back into the note's frontmatter. */
+  private async writeSyndication(file: TFile, name: string, url: string) {
+    await this.app.fileManager.processFrontMatter(file, (fm) => {
+      if (!Array.isArray(fm.syndication)) fm.syndication = [];
+      const already = (fm.syndication as Array<{ name?: string }>).some((s) => s.name === name);
+      if (!already) fm.syndication.push({ url, name });
+    });
+  }
+
+  private showStatusBarSuccess(siteName: string) {
+    if (!this.statusBarEl) return;
+    this.statusBarEl.setText(`POSSEd ✓ ${siteName}`);
+    window.setTimeout(() => {
+      if (this.statusBarEl) this.statusBarEl.setText("");
+    }, 5000);
+  }
+
+  /** Show current syndication status for the active note. */
+  private posseStatus() {
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!view || !view.file) {
+      new Notice("Open a markdown file first");
+      return;
+    }
+    const fileCache = this.app.metadataCache.getFileCache(view.file);
+    const syndication = fileCache?.frontmatter?.syndication;
+    const title = fileCache?.frontmatter?.title || view.file.basename;
+    new PosseStatusModal(this.app, title, syndication).open();
   }
 }
 
-class SitePickerModal extends SuggestModal<Site> {
-  private sites: Site[];
-  private onChoose: (site: Site) => void;
+/* ─── Confirmation Modal ──────────────────────────────────────────── */
 
-  constructor(app: App, sites: Site[], onChoose: (site: Site) => void) {
+class ConfirmPublishModal extends Modal {
+  private payload: Record<string, unknown>;
+  private destination: Destination;
+  private onConfirm: () => void;
+
+  constructor(
+    app: App,
+    payload: Record<string, unknown>,
+    destination: Destination,
+    onConfirm: () => void,
+  ) {
     super(app);
-    this.sites = sites;
-    this.onChoose = onChoose;
-    this.setPlaceholder("Choose a site to publish to...");
+    this.payload = payload;
+    this.destination = destination;
+    this.onConfirm = onConfirm;
   }
 
-  getSuggestions(query: string): Site[] {
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.addClass("posse-publisher-confirm-modal");
+
+    contentEl.createEl("h3", { text: "Confirm POSSE" });
+    contentEl.createEl("p", {
+      text: `You are about to POSSE to ${this.destination.name}:`,
+    });
+
+    const summary = contentEl.createDiv({ cls: "publish-summary" });
+    summary.createEl("div", { text: `Title: ${this.payload.title}` });
+    summary.createEl("div", { text: `Slug: ${this.payload.slug}` });
+    summary.createEl("div", { text: `Status: ${this.payload.status}` });
+    summary.createEl("div", { text: `Type: ${this.payload.type}` });
+
+    const buttons = contentEl.createDiv({ cls: "modal-button-container" });
+
+    const cancelBtn = buttons.createEl("button", { text: "Cancel" });
+    cancelBtn.addEventListener("click", () => this.close());
+
+    const confirmBtn = buttons.createEl("button", {
+      text: "POSSE",
+      cls: "mod-cta",
+    });
+    confirmBtn.addEventListener("click", () => {
+      this.close();
+      this.onConfirm();
+    });
+  }
+
+  onClose() {
+    this.contentEl.empty();
+  }
+}
+
+/* ─── Site Picker Modal ───────────────────────────────────────────── */
+
+class SitePickerModal extends SuggestModal<Destination> {
+  private destinations: Destination[];
+  private onChoose: (destination: Destination) => void;
+
+  constructor(app: App, destinations: Destination[], onChoose: (destination: Destination) => void) {
+    super(app);
+    this.destinations = destinations;
+    this.onChoose = onChoose;
+    this.setPlaceholder("Choose a destination to POSSE to...");
+  }
+
+  getSuggestions(query: string): Destination[] {
     const lower = query.toLowerCase();
-    return this.sites.filter(
-      (s) => s.name.toLowerCase().includes(lower) || s.url.toLowerCase().includes(lower),
+    return this.destinations.filter(
+      (d) =>
+        d.name.toLowerCase().includes(lower) ||
+        d.url.toLowerCase().includes(lower),
     );
   }
 
-  renderSuggestion(site: Site, el: HTMLElement) {
-    el.createEl("div", { text: site.name, cls: "suggestion-title" });
-    el.createEl("small", { text: site.url, cls: "suggestion-note" });
+  renderSuggestion(destination: Destination, el: HTMLElement) {
+    el.createEl("div", { text: destination.name, cls: "suggestion-title" });
+    el.createEl("small", { text: destination.url, cls: "suggestion-note" });
   }
 
-  onChooseSuggestion(site: Site) {
-    this.onChoose(site);
+  onChooseSuggestion(destination: Destination) {
+    this.onChoose(destination);
   }
 }
 
-class PublishBlogToWebSettingTab extends PluginSettingTab {
-  plugin: PublishBlogToWebPlugin;
+/* ─── Settings Tab ────────────────────────────────────────────────── */
 
-  constructor(app: App, plugin: PublishBlogToWebPlugin) {
+class PossePublisherSettingTab extends PluginSettingTab {
+  plugin: PossePublisherPlugin;
+
+  constructor(app: App, plugin: PossePublisherPlugin) {
     super(app, plugin);
     this.plugin = plugin;
   }
@@ -250,60 +754,217 @@ class PublishBlogToWebSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl("h2", { text: "Sites" });
+    containerEl.createEl("h2", { text: "Your Canonical Site" });
 
-    this.plugin.settings.sites.forEach((site, index) => {
-      const siteContainer = containerEl.createDiv({ cls: "publish-blog-to-web-site" });
-      siteContainer.createEl("h3", { text: site.name || `Site ${index + 1}` });
+    new Setting(containerEl)
+      .setName("Canonical Base URL")
+      .setDesc("Your own site's root URL. Every published post will include a canonicalUrl pointing here — the original you own.")
+      .addText((text) =>
+        text
+          .setPlaceholder("https://yoursite.com")
+          .setValue(this.plugin.settings.canonicalBaseUrl)
+          .onChange(async (value) => {
+            this.plugin.settings.canonicalBaseUrl = value;
+            if (value && !value.startsWith("https://") && !value.startsWith("http://localhost")) {
+              new Notice("Warning: Canonical Base URL should start with https://");
+            }
+            await this.plugin.saveSettings();
+          }),
+      );
 
-      new Setting(siteContainer)
-        .setName("Site Name")
-        .setDesc("A label for this site (e.g. My Blog)")
+    containerEl.createEl("h2", { text: "Destinations" });
+
+    this.plugin.settings.destinations.forEach((destination, index) => {
+      const destContainer = containerEl.createDiv({
+        cls: "posse-publisher-site",
+      });
+      destContainer.createEl("h3", {
+        text: destination.name || `Destination ${index + 1}`,
+      });
+
+      new Setting(destContainer)
+        .setName("Destination Name")
+        .setDesc("A label for this destination (e.g. My Blog)")
         .addText((text) =>
           text
             .setPlaceholder("My Site")
-            .setValue(site.name)
+            .setValue(destination.name)
             .onChange(async (value) => {
-              this.plugin.settings.sites[index].name = value;
+              this.plugin.settings.destinations[index].name = value;
               await this.plugin.saveSettings();
             }),
         );
 
-      new Setting(siteContainer)
-        .setName("Site URL")
-        .setDesc("The site's base URL")
-        .addText((text) =>
-          text
-            .setPlaceholder("https://example.com")
-            .setValue(site.url)
+      new Setting(destContainer)
+        .setName("Type")
+        .setDesc("Platform to publish to")
+        .addDropdown((dd) =>
+          dd
+            .addOption("custom-api", "Custom API")
+            .addOption("devto", "Dev.to")
+            .addOption("mastodon", "Mastodon")
+            .addOption("bluesky", "Bluesky")
+            .setValue(destination.type || "custom-api")
             .onChange(async (value) => {
-              this.plugin.settings.sites[index].url = value;
-              await this.plugin.saveSettings();
-            }),
-        );
-
-      new Setting(siteContainer)
-        .setName("API Key")
-        .setDesc("PUBLISH_API_KEY from that site's .env.local")
-        .addText((text) =>
-          text
-            .setPlaceholder("Enter API key")
-            .setValue(site.apiKey)
-            .onChange(async (value) => {
-              this.plugin.settings.sites[index].apiKey = value;
-              await this.plugin.saveSettings();
-            }),
-        );
-
-      new Setting(siteContainer)
-        .addButton((btn) =>
-          btn
-            .setButtonText("Remove Site")
-            .setWarning()
-            .onClick(async () => {
-              this.plugin.settings.sites.splice(index, 1);
+              this.plugin.settings.destinations[index].type = value as DestinationType;
               await this.plugin.saveSettings();
               this.display();
+            }),
+        );
+
+      const destType = destination.type || "custom-api";
+
+      if (destType === "custom-api") {
+        new Setting(destContainer)
+          .setName("Site URL")
+          .setDesc("Your site's base URL (must start with https://)")
+          .addText((text) =>
+            text
+              .setPlaceholder("https://example.com")
+              .setValue(destination.url || "")
+              .onChange(async (value) => {
+                this.plugin.settings.destinations[index].url = value;
+                if (value && !value.startsWith("https://") && !value.startsWith("http://localhost")) {
+                  new Notice("Warning: Destination URL should start with https://");
+                }
+                await this.plugin.saveSettings();
+              }),
+          );
+        new Setting(destContainer)
+          .setName("API Key")
+          .setDesc("PUBLISH_API_KEY from your site's environment")
+          .addText((text) => {
+            text
+              .setPlaceholder("Enter API key")
+              .setValue(destination.apiKey || "")
+              .onChange(async (value) => {
+                this.plugin.settings.destinations[index].apiKey = value;
+                await this.plugin.saveSettings();
+              });
+            text.inputEl.type = "password";
+            text.inputEl.autocomplete = "off";
+          });
+      } else if (destType === "devto") {
+        new Setting(destContainer)
+          .setName("Dev.to API Key")
+          .setDesc("From https://dev.to/settings/extensions")
+          .addText((text) => {
+            text
+              .setPlaceholder("Enter Dev.to API key")
+              .setValue(destination.apiKey || "")
+              .onChange(async (value) => {
+                this.plugin.settings.destinations[index].apiKey = value;
+                await this.plugin.saveSettings();
+              });
+            text.inputEl.type = "password";
+            text.inputEl.autocomplete = "off";
+          });
+      } else if (destType === "mastodon") {
+        new Setting(destContainer)
+          .setName("Instance URL")
+          .setDesc("Your Mastodon instance (e.g. https://mastodon.social)")
+          .addText((text) =>
+            text
+              .setPlaceholder("https://mastodon.social")
+              .setValue(destination.instanceUrl || "")
+              .onChange(async (value) => {
+                this.plugin.settings.destinations[index].instanceUrl = value;
+                await this.plugin.saveSettings();
+              }),
+          );
+        new Setting(destContainer)
+          .setName("Access Token")
+          .setDesc("From your Mastodon account: Settings → Development → New Application")
+          .addText((text) => {
+            text
+              .setPlaceholder("Enter access token")
+              .setValue(destination.accessToken || "")
+              .onChange(async (value) => {
+                this.plugin.settings.destinations[index].accessToken = value;
+                await this.plugin.saveSettings();
+              });
+            text.inputEl.type = "password";
+            text.inputEl.autocomplete = "off";
+          });
+      } else if (destType === "bluesky") {
+        new Setting(destContainer)
+          .setName("Bluesky Handle")
+          .setDesc("Your handle (e.g. yourname.bsky.social)")
+          .addText((text) =>
+            text
+              .setPlaceholder("yourname.bsky.social")
+              .setValue(destination.handle || "")
+              .onChange(async (value) => {
+                this.plugin.settings.destinations[index].handle = value;
+                await this.plugin.saveSettings();
+              }),
+          );
+        new Setting(destContainer)
+          .setName("App Password")
+          .setDesc("From https://bsky.app/settings/app-passwords — NOT your login password")
+          .addText((text) => {
+            text
+              .setPlaceholder("xxxx-xxxx-xxxx-xxxx")
+              .setValue(destination.appPassword || "")
+              .onChange(async (value) => {
+                this.plugin.settings.destinations[index].appPassword = value;
+                await this.plugin.saveSettings();
+              });
+            text.inputEl.type = "password";
+            text.inputEl.autocomplete = "off";
+          });
+      }
+
+      new Setting(destContainer)
+        .addButton((btn) =>
+          btn.setButtonText("Test Connection").onClick(async () => {
+            if (!this.plugin.hasValidCredentials(destination)) {
+              new Notice("Configure credentials first");
+              return;
+            }
+            if (destType === "custom-api") {
+              try {
+                const url = `${destination.url.replace(/\/$/, "")}/api/publish`;
+                const response = await requestUrl({
+                  url,
+                  method: "OPTIONS",
+                  headers: { "x-publish-key": destination.apiKey },
+                });
+                if (response.status >= 200 && response.status < 400) {
+                  new Notice(`✓ Connection to ${destination.name || destination.url} successful`);
+                } else {
+                  new Notice(`✗ ${destination.name || destination.url} responded with ${response.status}`);
+                }
+              } catch {
+                new Notice(`✗ Could not reach ${destination.name || destination.url}`);
+              }
+            } else {
+              new Notice(`Credentials look configured for ${destination.name}. Publish to test.`);
+            }
+          }),
+        )
+        .addButton((btn) =>
+          btn
+            .setButtonText("Remove Destination")
+            .setWarning()
+            .onClick(async () => {
+              const confirmEl = destContainer.createDiv({
+                cls: "setting-item",
+              });
+              confirmEl.createEl("span", {
+                text: `Remove "${destination.name || "this destination"}"? `,
+              });
+              const yesBtn = confirmEl.createEl("button", {
+                text: "Yes, remove",
+                cls: "mod-warning",
+              });
+              const noBtn = confirmEl.createEl("button", { text: "Cancel" });
+              yesBtn.addEventListener("click", async () => {
+                this.plugin.settings.destinations.splice(index, 1);
+                await this.plugin.saveSettings();
+                this.display();
+              });
+              noBtn.addEventListener("click", () => confirmEl.remove());
             }),
         );
     });
@@ -311,10 +972,15 @@ class PublishBlogToWebSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .addButton((btn) =>
         btn
-          .setButtonText("Add Site")
+          .setButtonText("Add Destination")
           .setCta()
           .onClick(async () => {
-            this.plugin.settings.sites.push({ name: "", url: "", apiKey: "" });
+            this.plugin.settings.destinations.push({
+              name: "",
+              type: "custom-api",
+              url: "",
+              apiKey: "",
+            });
             await this.plugin.saveSettings();
             this.display();
           }),
@@ -331,9 +997,91 @@ class PublishBlogToWebSettingTab extends PluginSettingTab {
           .addOption("published", "Published")
           .setValue(this.plugin.settings.defaultStatus)
           .onChange(async (value) => {
-            this.plugin.settings.defaultStatus = value as "draft" | "published";
+            this.plugin.settings.defaultStatus = value as
+              | "draft"
+              | "published";
             await this.plugin.saveSettings();
           }),
       );
+
+    new Setting(containerEl)
+      .setName("Confirm Before Publishing")
+      .setDesc("Show a confirmation modal with post details before publishing")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.confirmBeforePublish)
+          .onChange(async (value) => {
+            this.plugin.settings.confirmBeforePublish = value;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Strip Obsidian Syntax")
+      .setDesc(
+        "Convert wiki-links, remove embeds, comments, and dataview blocks before publishing",
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.stripObsidianSyntax)
+          .onChange(async (value) => {
+            this.plugin.settings.stripObsidianSyntax = value;
+            await this.plugin.saveSettings();
+          }),
+      );
+  }
+}
+
+/* ─── POSSE Status Modal ──────────────────────────────────────────── */
+
+type SyndicationEntry = { url?: string; name?: string };
+
+class PosseStatusModal extends Modal {
+  private title: string;
+  private syndication: SyndicationEntry[] | unknown;
+
+  constructor(app: App, title: string, syndication: unknown) {
+    super(app);
+    this.title = title;
+    this.syndication = syndication;
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.addClass("posse-publisher-confirm-modal");
+    contentEl.createEl("h3", { text: "POSSE Status" });
+    contentEl.createEl("p", { text: `Note: ${this.title}` });
+
+    const entries = Array.isArray(this.syndication)
+      ? (this.syndication as SyndicationEntry[])
+      : [];
+
+    if (entries.length === 0) {
+      contentEl.createEl("p", {
+        text: "This note has not been POSSEd to any destination yet.",
+      });
+    } else {
+      contentEl.createEl("strong", { text: `Syndicated to ${entries.length} destination(s):` });
+      const list = contentEl.createEl("ul");
+      for (const entry of entries) {
+        const li = list.createEl("li");
+        if (entry.url) {
+          const a = li.createEl("a", { text: entry.name || entry.url });
+          a.href = entry.url;
+          a.target = "_blank";
+          a.rel = "noopener";
+        } else {
+          li.setText(entry.name || "Unknown");
+        }
+      }
+    }
+
+    const buttons = contentEl.createDiv({ cls: "modal-button-container" });
+    const closeBtn = buttons.createEl("button", { text: "Close" });
+    closeBtn.addEventListener("click", () => this.close());
+  }
+
+  onClose() {
+    this.contentEl.empty();
   }
 }

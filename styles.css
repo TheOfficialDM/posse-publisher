@@ -1,0 +1,40 @@
+/* POSSE Publisher — Settings styles */
+
+.posse-publisher-site {
+  margin-bottom: 1.5rem;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--interactive-accent);
+  border-radius: 4px;
+  background-color: var(--background-secondary);
+}
+
+.posse-publisher-site h3 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+.posse-publisher-site .setting-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.posse-publisher-confirm-modal .modal-content {
+  padding: 1rem;
+}
+
+.posse-publisher-confirm-modal .publish-summary {
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  background-color: var(--background-secondary);
+  border-radius: 4px;
+  font-family: var(--font-monospace);
+  font-size: var(--font-smaller);
+  line-height: 1.6;
+}
+
+.posse-publisher-confirm-modal .modal-button-container {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}

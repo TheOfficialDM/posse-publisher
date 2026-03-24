@@ -1,9 +1,11 @@
 {
-  "id": "publish-blog-to-web",
-  "name": "Publish Blog to Web",
-  "version": "1.0.0",
-  "minAppVersion": "1.0.0",
-  "description": "Publish notes directly to your website's blog",
+  "id": "posse-publisher",
+  "name": "POSSE Publisher",
+  "version": "2.0.0",
+  "minAppVersion": "0.15.0",
+  "description": "Publish on your Own Site, Syndicate Elsewhere. A POSSE-native Obsidian plugin for syndicating your notes to your canonical site and multiple platforms (Dev.to, Mastodon, Bluesky) while keeping ownership.",
   "author": "Devin Marshall",
+  "authorUrl": "https://github.com/TheOfficialDM",
+  "fundingUrl": "https://github.com/sponsors/TheOfficialDM",
   "isDesktopOnly": false
 }

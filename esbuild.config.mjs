@@ -1,6 +1,8 @@
 import esbuild from "esbuild";
 
-esbuild.build({
+const watch = process.argv.includes("--watch");
+
+const ctx = await esbuild.context({
   entryPoints: ["main.ts"],
   bundle: true,
   external: ["obsidian"],
@@ -10,4 +12,12 @@ esbuild.build({
   platform: "node",
   sourcemap: "inline",
   logLevel: "info",
-}).catch(() => process.exit(1));
+});
+
+if (watch) {
+  await ctx.watch();
+  console.log("Watching for changes...");
+} else {
+  await ctx.rebuild();
+  await ctx.dispose();
+}
