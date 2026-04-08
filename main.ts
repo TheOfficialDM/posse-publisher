@@ -11,7 +11,7 @@ import {
   TFile,
 } from "obsidian";
 
-type DestinationType = "custom-api" | "devto" | "mastodon" | "bluesky";
+type DestinationType = "custom-api" | "devto" | "mastodon" | "bluesky" | "medium" | "reddit" | "threads" | "linkedin" | "ecency";
 
 interface Destination {
   name: string;
@@ -25,6 +25,25 @@ interface Destination {
   // bluesky
   handle?: string;
   appPassword?: string;
+  // medium
+  mediumToken?: string;
+  mediumAuthorId?: string;
+  // reddit
+  redditClientId?: string;
+  redditClientSecret?: string;
+  redditRefreshToken?: string;
+  redditUsername?: string;
+  redditDefaultSubreddit?: string;
+  // threads
+  threadsUserId?: string;
+  threadsAccessToken?: string;
+  // linkedin
+  linkedinAccessToken?: string;
+  linkedinPersonUrn?: string;
+  // ecency / hive
+  hiveUsername?: string;
+  hivePostingKey?: string;
+  hiveCommunity?: string;
 }
 
 interface PossePublisherSettings {
@@ -99,6 +118,8 @@ function buildFrontmatter(cache: Record<string, unknown> | undefined): Frontmatt
       .filter(Boolean);
   }
 
+  if (typeof cache.canonicalUrl === "string") fm.canonicalUrl = cache.canonicalUrl;
+
   return fm;
 }
 
@@ -137,6 +158,112 @@ export function preprocessContent(body: string): string {
   body = body.replace(/\n{3,}/g, "\n\n");
 
   return body.trim();
+}
+
+/** Escape HTML special characters. */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * Convert basic Markdown to HTML. Handles headings, bold, italic, inline code,
+ * links, images, lists, blockquotes, horizontal rules, fenced code blocks, and paragraphs.
+ * No external dependencies — regex only.
+ */
+export function markdownToHtml(markdown: string): string {
+  let html = markdown;
+
+  // Fenced code blocks (process first to avoid mangling their contents)
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) =>
+    `<pre><code${lang ? ` class="language-${lang}"` : ""}>${escapeHtml(code.trim())}</code></pre>`
+  );
+
+  // Headings
+  html = html.replace(/^###### (.+)$/gm, "<h6>$1</h6>");
+  html = html.replace(/^##### (.+)$/gm, "<h5>$1</h5>");
+  html = html.replace(/^#### (.+)$/gm, "<h4>$1</h4>");
+  html = html.replace(/^### (.+)$/gm, "<h3>$1</h3>");
+  html = html.replace(/^## (.+)$/gm, "<h2>$1</h2>");
+  html = html.replace(/^# (.+)$/gm, "<h1>$1</h1>");
+
+  // Horizontal rules
+  html = html.replace(/^[-*_]{3,}\s*$/gm, "<hr>");
+
+  // Blockquotes
+  html = html.replace(/^> (.+)$/gm, "<blockquote>$1</blockquote>");
+
+  // Bold + italic (order: triple → double → single)
+  html = html.replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>");
+  html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
+  html = html.replace(/___(.+?)___/g, "<strong><em>$1</em></strong>");
+  html = html.replace(/__(.+?)__/g, "<strong>$1</strong>");
+  html = html.replace(/_(.+?)_/g, "<em>$1</em>");
+
+  // Inline code
+  html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+
+  // Images (before links)
+  html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">');
+
+  // Links
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+
+  // Unordered list items
+  html = html.replace(/^[-*+] (.+)$/gm, "<li>$1</li>");
+
+  // Ordered list items
+  html = html.replace(/^\d+\. (.+)$/gm, "<li>$1</li>");
+
+  // Wrap <li> runs in <ul>
+  html = html.replace(/(<li>[\s\S]*?<\/li>\n?)+/g, (match) => `<ul>${match}</ul>`);
+
+  // Paragraphs (double newline → paragraph block)
+  html = html
+    .split(/\n\n+/)
+    .map((block) => {
+      const trimmed = block.trim();
+      if (!trimmed) return "";
+      if (/^<(h[1-6]|ul|ol|li|blockquote|pre|hr)/.test(trimmed)) return trimmed;
+      return `<p>${trimmed.replace(/\n/g, "<br>")}</p>`;
+    })
+    .filter(Boolean)
+    .join("\n");
+
+  return html;
+}
+
+/**
+ * Strip all Markdown syntax to produce plain text suitable for
+ * character-limited platforms (Threads, Mastodon preview, etc.).
+ */
+export function markdownToPlainText(markdown: string): string {
+  let text = markdown;
+  // Fenced code blocks → keep content
+  text = text.replace(/```\w*\n([\s\S]*?)```/g, "$1");
+  // Remove heading markers
+  text = text.replace(/^#{1,6} /gm, "");
+  // Bold/italic markers
+  text = text.replace(/\*{1,3}|_{1,3}/g, "");
+  // Inline code → unwrap
+  text = text.replace(/`([^`]+)`/g, "$1");
+  // Images → alt text
+  text = text.replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1");
+  // Links → link text
+  text = text.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+  // Blockquotes
+  text = text.replace(/^> /gm, "");
+  // List markers
+  text = text.replace(/^[-*+\d.] /gm, "");
+  // Horizontal rules
+  text = text.replace(/^[-*_]{3,}\s*$/gm, "");
+  // Collapse multiple blank lines
+  text = text.replace(/\n{3,}/g, "\n\n");
+  return text.trim();
 }
 
 const FRONTMATTER_TEMPLATE = `---
@@ -277,39 +404,30 @@ export default class PossePublisherPlugin extends Plugin {
     }).open();
   }
 
-  private async preparePublish(destination: Destination, overrideStatus?: "draft" | "published") {
-    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-    if (!view || !view.file) {
-      new Notice("Open a markdown file first");
-      return;
-    }
-
-    if (!this.hasValidCredentials(destination)) {
-      new Notice(`Configure credentials for "${destination.name}" in POSSE Publisher settings`);
-      return;
-    }
-
-    // Read from vault cache — works in both edit and reading modes
-    const content = await this.app.vault.cachedRead(view.file);
-    const fileCache = this.app.metadataCache.getFileCache(view.file);
+  /**
+   * Build the publish payload from the active file and settings.
+   * Shared by preparePublish() and posseToAll() to avoid duplication.
+   */
+  private async buildPayload(
+    file: TFile,
+    overrideStatus?: "draft" | "published",
+  ): Promise<Record<string, unknown>> {
+    const content = await this.app.vault.cachedRead(file);
+    const fileCache = this.app.metadataCache.getFileCache(file);
     const frontmatter = buildFrontmatter(fileCache?.frontmatter);
-
     const body = extractBody(content);
-    const processedBody = this.settings.stripObsidianSyntax
-      ? preprocessContent(body)
-      : body;
-
-    const title = frontmatter.title || view.file.basename || "Untitled";
+    const processedBody = this.settings.stripObsidianSyntax ? preprocessContent(body) : body;
+    const title = frontmatter.title || file.basename || "Untitled";
     const slug = frontmatter.slug || toSlug(title);
     const status = overrideStatus || frontmatter.status || this.settings.defaultStatus;
     const postType = frontmatter.type || "blog";
-
-    // Generate canonical URL if base URL is configured
-    const canonicalUrl = this.settings.canonicalBaseUrl
-      ? `${this.settings.canonicalBaseUrl.replace(/\/$/, "")}/${postType}/${slug}`
-      : "";
-
-    const payload = {
+    // Use frontmatter canonicalUrl override if present; otherwise auto-generate
+    const canonicalUrl =
+      frontmatter.canonicalUrl ||
+      (this.settings.canonicalBaseUrl
+        ? `${this.settings.canonicalBaseUrl.replace(/\/$/, "")}/${postType}/${slug}`
+        : "");
+    return {
       title,
       slug,
       body: processedBody,
@@ -326,6 +444,21 @@ export default class PossePublisherPlugin extends Plugin {
       videoUrl: frontmatter.videoUrl || "",
       ...(canonicalUrl && { canonicalUrl }),
     };
+  }
+
+  private async preparePublish(destination: Destination, overrideStatus?: "draft" | "published") {
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!view || !view.file) {
+      new Notice("Open a markdown file first");
+      return;
+    }
+
+    if (!this.hasValidCredentials(destination)) {
+      new Notice(`Configure credentials for "${destination.name}" in POSSE Publisher settings`);
+      return;
+    }
+
+    const payload = await this.buildPayload(view.file, overrideStatus);
 
     if (this.settings.confirmBeforePublish) {
       new ConfirmPublishModal(this.app, payload, destination, () => {
@@ -349,6 +482,13 @@ export default class PossePublisherPlugin extends Plugin {
         return this.publishToMastodon(destination, payload, file);
       case "bluesky":
         return this.publishToBluesky(destination, payload, file);
+      case "medium":
+      case "reddit":
+      case "threads":
+      case "linkedin":
+      case "ecency":
+        new Notice(`${destination.name}: ${destination.type} support is coming in a future update`);
+        return;
       default:
         return this.publishToCustomApi(destination, payload, file);
     }
@@ -577,33 +717,8 @@ export default class PossePublisherPlugin extends Plugin {
       new Notice("Open a markdown file first");
       return;
     }
-    const content = await this.app.vault.cachedRead(view.file);
-    const fileCache = this.app.metadataCache.getFileCache(view.file);
-    const frontmatter = buildFrontmatter(fileCache?.frontmatter);
-    const body = extractBody(content);
-    const processedBody = this.settings.stripObsidianSyntax ? preprocessContent(body) : body;
-    const title = frontmatter.title || view.file.basename || "Untitled";
-    const slug = frontmatter.slug || toSlug(title);
-    const status = overrideStatus || frontmatter.status || this.settings.defaultStatus;
-    const postType = frontmatter.type || "blog";
-    const canonicalUrl = this.settings.canonicalBaseUrl
-      ? `${this.settings.canonicalBaseUrl.replace(/\/$/, "")}/${postType}/${slug}`
-      : "";
-    const payload: Record<string, unknown> = {
-      title, slug, body: processedBody,
-      excerpt: frontmatter.excerpt || "",
-      type: postType, status,
-      tags: frontmatter.tags || [],
-      pillar: frontmatter.pillar || "",
-      featured: frontmatter.featured || false,
-      coverImage: frontmatter.coverImage || "",
-      metaTitle: frontmatter.metaTitle || "",
-      metaDescription: frontmatter.metaDescription || "",
-      ogImage: frontmatter.ogImage || "",
-      videoUrl: frontmatter.videoUrl || "",
-      ...(canonicalUrl && { canonicalUrl }),
-    };
-    new Notice(`POSSEing "${title}" to ${destinations.length} destination(s)...`);
+    const payload = await this.buildPayload(view.file, overrideStatus);
+    new Notice(`POSSEing "${payload.title}" to ${destinations.length} destination(s)...`);
     for (const dest of destinations) {
       if (this.hasValidCredentials(dest)) {
         await this.publishToDestination(dest, payload, view.file);
@@ -619,16 +734,26 @@ export default class PossePublisherPlugin extends Plugin {
       case "devto":    return !!dest.apiKey;
       case "mastodon": return !!(dest.instanceUrl && dest.accessToken);
       case "bluesky":  return !!(dest.handle && dest.appPassword);
+      case "medium":   return !!dest.mediumToken;
+      case "reddit":   return !!(dest.redditClientId && dest.redditClientSecret && dest.redditRefreshToken);
+      case "threads":  return !!(dest.threadsUserId && dest.threadsAccessToken);
+      case "linkedin": return !!(dest.linkedinAccessToken && dest.linkedinPersonUrn);
+      case "ecency":   return !!(dest.hiveUsername && dest.hivePostingKey);
       default:         return !!(dest.url && dest.apiKey);
     }
   }
 
-  /** Write a syndication entry back into the note's frontmatter. */
+  /** Write a syndication entry back into the note's frontmatter. Updates the URL if the destination already exists. */
   private async writeSyndication(file: TFile, name: string, url: string) {
     await this.app.fileManager.processFrontMatter(file, (fm) => {
       if (!Array.isArray(fm.syndication)) fm.syndication = [];
-      const already = (fm.syndication as Array<{ name?: string }>).some((s) => s.name === name);
-      if (!already) fm.syndication.push({ url, name });
+      const entries = fm.syndication as Array<{ name?: string; url?: string }>;
+      const existing = entries.find((s) => s.name === name);
+      if (existing) {
+        existing.url = url;
+      } else {
+        entries.push({ url, name });
+      }
     });
   }
 
@@ -804,6 +929,11 @@ class PossePublisherSettingTab extends PluginSettingTab {
             .addOption("devto", "Dev.to")
             .addOption("mastodon", "Mastodon")
             .addOption("bluesky", "Bluesky")
+            .addOption("medium", "Medium")
+            .addOption("reddit", "Reddit")
+            .addOption("threads", "Threads")
+            .addOption("linkedin", "LinkedIn")
+            .addOption("ecency", "Ecency (Hive)")
             .setValue(destination.type || "custom-api")
             .onChange(async (value) => {
               this.plugin.settings.destinations[index].type = value as DestinationType;
@@ -913,6 +1043,181 @@ class PossePublisherSettingTab extends PluginSettingTab {
             text.inputEl.type = "password";
             text.inputEl.autocomplete = "off";
           });
+      } else if (destType === "medium") {
+        destContainer.createEl("p", {
+          text: "Note: The Medium API was archived in March 2023. It may still work but could be discontinued at any time.",
+          cls: "setting-item-description mod-warning",
+        });
+        new Setting(destContainer)
+          .setName("Integration Token")
+          .setDesc("From medium.com → Settings → Security and apps → Integration tokens")
+          .addText((text) => {
+            text
+              .setPlaceholder("Enter Medium integration token")
+              .setValue(destination.mediumToken || "")
+              .onChange(async (value) => {
+                this.plugin.settings.destinations[index].mediumToken = value;
+                await this.plugin.saveSettings();
+              });
+            text.inputEl.type = "password";
+            text.inputEl.autocomplete = "off";
+          });
+      } else if (destType === "reddit") {
+        new Setting(destContainer)
+          .setName("Client ID")
+          .setDesc("From reddit.com/prefs/apps — create a \"script\" type app")
+          .addText((text) =>
+            text
+              .setPlaceholder("Client ID")
+              .setValue(destination.redditClientId || "")
+              .onChange(async (value) => {
+                this.plugin.settings.destinations[index].redditClientId = value;
+                await this.plugin.saveSettings();
+              }),
+          );
+        new Setting(destContainer)
+          .setName("Client Secret")
+          .addText((text) => {
+            text
+              .setPlaceholder("Client secret")
+              .setValue(destination.redditClientSecret || "")
+              .onChange(async (value) => {
+                this.plugin.settings.destinations[index].redditClientSecret = value;
+                await this.plugin.saveSettings();
+              });
+            text.inputEl.type = "password";
+            text.inputEl.autocomplete = "off";
+          });
+        new Setting(destContainer)
+          .setName("Refresh Token")
+          .setDesc("OAuth2 refresh token for your Reddit account")
+          .addText((text) => {
+            text
+              .setPlaceholder("Refresh token")
+              .setValue(destination.redditRefreshToken || "")
+              .onChange(async (value) => {
+                this.plugin.settings.destinations[index].redditRefreshToken = value;
+                await this.plugin.saveSettings();
+              });
+            text.inputEl.type = "password";
+            text.inputEl.autocomplete = "off";
+          });
+        new Setting(destContainer)
+          .setName("Reddit Username")
+          .addText((text) =>
+            text
+              .setPlaceholder("u/yourname")
+              .setValue(destination.redditUsername || "")
+              .onChange(async (value) => {
+                this.plugin.settings.destinations[index].redditUsername = value;
+                await this.plugin.saveSettings();
+              }),
+          );
+        new Setting(destContainer)
+          .setName("Default Subreddit")
+          .setDesc("e.g. r/webdev — can be overridden per note with \"subreddit:\" frontmatter")
+          .addText((text) =>
+            text
+              .setPlaceholder("r/subredditname")
+              .setValue(destination.redditDefaultSubreddit || "")
+              .onChange(async (value) => {
+                this.plugin.settings.destinations[index].redditDefaultSubreddit = value;
+                await this.plugin.saveSettings();
+              }),
+          );
+      } else if (destType === "threads") {
+        new Setting(destContainer)
+          .setName("Threads User ID")
+          .setDesc("Your numeric Threads/Instagram user ID")
+          .addText((text) =>
+            text
+              .setPlaceholder("123456789")
+              .setValue(destination.threadsUserId || "")
+              .onChange(async (value) => {
+                this.plugin.settings.destinations[index].threadsUserId = value;
+                await this.plugin.saveSettings();
+              }),
+          );
+        new Setting(destContainer)
+          .setName("Access Token")
+          .setDesc("Long-lived Threads access token with threads_content_publish permission")
+          .addText((text) => {
+            text
+              .setPlaceholder("Enter access token")
+              .setValue(destination.threadsAccessToken || "")
+              .onChange(async (value) => {
+                this.plugin.settings.destinations[index].threadsAccessToken = value;
+                await this.plugin.saveSettings();
+              });
+            text.inputEl.type = "password";
+            text.inputEl.autocomplete = "off";
+          });
+      } else if (destType === "linkedin") {
+        new Setting(destContainer)
+          .setName("Access Token")
+          .setDesc("OAuth2 bearer token with w_member_social scope")
+          .addText((text) => {
+            text
+              .setPlaceholder("Enter access token")
+              .setValue(destination.linkedinAccessToken || "")
+              .onChange(async (value) => {
+                this.plugin.settings.destinations[index].linkedinAccessToken = value;
+                await this.plugin.saveSettings();
+              });
+            text.inputEl.type = "password";
+            text.inputEl.autocomplete = "off";
+          });
+        new Setting(destContainer)
+          .setName("Person URN")
+          .setDesc("Your LinkedIn member URN, e.g. urn:li:person:abc123")
+          .addText((text) =>
+            text
+              .setPlaceholder("urn:li:person:...")
+              .setValue(destination.linkedinPersonUrn || "")
+              .onChange(async (value) => {
+                this.plugin.settings.destinations[index].linkedinPersonUrn = value;
+                await this.plugin.saveSettings();
+              }),
+          );
+      } else if (destType === "ecency") {
+        new Setting(destContainer)
+          .setName("Hive Username")
+          .setDesc("Your Hive/Ecency account name (without @)")
+          .addText((text) =>
+            text
+              .setPlaceholder("yourusername")
+              .setValue(destination.hiveUsername || "")
+              .onChange(async (value) => {
+                this.plugin.settings.destinations[index].hiveUsername = value;
+                await this.plugin.saveSettings();
+              }),
+          );
+        new Setting(destContainer)
+          .setName("Posting Key")
+          .setDesc("Your Hive private posting key (not the owner or active key)")
+          .addText((text) => {
+            text
+              .setPlaceholder("5K...")
+              .setValue(destination.hivePostingKey || "")
+              .onChange(async (value) => {
+                this.plugin.settings.destinations[index].hivePostingKey = value;
+                await this.plugin.saveSettings();
+              });
+            text.inputEl.type = "password";
+            text.inputEl.autocomplete = "off";
+          });
+        new Setting(destContainer)
+          .setName("Community")
+          .setDesc("Hive community tag to post in (e.g. hive-174301 for OCD)")
+          .addText((text) =>
+            text
+              .setPlaceholder("hive-174301")
+              .setValue(destination.hiveCommunity || "")
+              .onChange(async (value) => {
+                this.plugin.settings.destinations[index].hiveCommunity = value;
+                await this.plugin.saveSettings();
+              }),
+          );
       }
 
       new Setting(destContainer)
@@ -1028,6 +1333,40 @@ class PossePublisherSettingTab extends PluginSettingTab {
             this.plugin.settings.stripObsidianSyntax = value;
             await this.plugin.saveSettings();
           }),
+      );
+
+    /* ── Support section ── */
+    containerEl.createEl("h2", { text: "Support POSSE Publisher" });
+    containerEl.createEl("p", {
+      text: "POSSE Publisher is free and open source. If it saves you time, consider supporting its development.",
+      cls: "setting-item-description",
+    });
+
+    new Setting(containerEl)
+      .setName("Buy Me a Coffee")
+      .setDesc("One-time or recurring support")
+      .addButton((btn) =>
+        btn.setButtonText("\u2615 Support").onClick(() => {
+          window.open("https://buymeacoffee.com/theofficaldm", "_blank");
+        }),
+      );
+
+    new Setting(containerEl)
+      .setName("GitHub Sponsors")
+      .setDesc("Monthly sponsorship through GitHub")
+      .addButton((btn) =>
+        btn.setButtonText("\u2764 Sponsor").onClick(() => {
+          window.open("https://github.com/sponsors/TheOfficialDM", "_blank");
+        }),
+      );
+
+    new Setting(containerEl)
+      .setName("All Funding Options")
+      .setDesc("devinmarshall.info/fund")
+      .addButton((btn) =>
+        btn.setButtonText("\uD83D\uDD17 Fund").onClick(() => {
+          window.open("https://devinmarshall.info/fund", "_blank");
+        }),
       );
   }
 }

@@ -1,5 +1,31 @@
 # Changelog
 
+## 2.1.0
+
+**Foundation for multi-platform syndication**
+
+### Fixed
+- `canonicalUrl` frontmatter field now respected as an override — previously ignored even when set explicitly in a note; auto-generation still applies when the field is absent
+- `writeSyndication()` now updates the URL of an existing syndication entry on republish instead of silently skipping it
+- Removed deprecated `baseUrl` from `tsconfig.json` (redundant with `moduleResolution: "bundler"`)
+
+### New
+- **5 new destination types** in settings UI: `medium`, `reddit`, `threads`, `linkedin`, `ecency` — full credential configuration available; platform publishing ships in upcoming releases
+- `buildPayload()` — shared internal method replacing duplicated logic between `preparePublish()` and `posseToAll()`
+- `markdownToHtml()` — zero-dependency Markdown→HTML converter for platforms that require HTML body content
+- `markdownToPlainText()` — strips all Markdown syntax for character-limited platforms (Threads, LinkedIn)
+- **Support section** added to plugin settings with Buy Me a Coffee, GitHub Sponsors, and Fund buttons
+- **Support section** added to README with donation table and QR code
+
+### Changed
+- `manifest.json` `fundingUrl` updated to `https://devinmarshall.info/fund`
+- `manifest.json` description updated to mention all planned syndication platforms
+- README Destinations table updated to include all 9 platform types
+- README intro updated to mention all supported platforms
+- README legacy "Publish Blog to Web" duplicate content removed
+
+---
+
 ## 2.0.0
 
 **POSSE Publisher — Major rebrand & architecture upgrade**

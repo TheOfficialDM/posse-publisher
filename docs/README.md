@@ -2,7 +2,7 @@
 
 > **Publish on your Own Site, Syndicate Elsewhere.**
 
-POSSE Publisher brings the [IndieWeb POSSE](https://indieweb.org/POSSE) philosophy to Obsidian. Write once in your vault, publish to your canonical site first, then syndicate copies to platforms like Dev.to, Mastodon, and Bluesky — with every syndicated copy linking back to your original.
+POSSE Publisher brings the [IndieWeb POSSE](https://indieweb.org/POSSE) philosophy to Obsidian. Write once in your vault, publish to your canonical site first, then syndicate copies to platforms like Dev.to, Mastodon, Bluesky, Medium, Reddit, Threads, LinkedIn, and Ecency — with every syndicated copy linking back to your original.
 
 **Your content. Your domain. Your canonical URL.**
 
@@ -68,6 +68,13 @@ Add as many destinations as you need. Each destination has a `type` that control
 | `devto` | [Dev.to](https://dev.to) | API key |
 | `mastodon` | Mastodon (any instance) | Access token |
 | `bluesky` | Bluesky (bsky.app) | App password |
+| `medium` | [Medium](https://medium.com) | Integration token *(API archived March 2023 — may be discontinued)* |
+| `reddit` | [Reddit](https://reddit.com) | OAuth2 (client ID + secret + refresh token) |
+| `threads` | [Threads](https://threads.net) | Meta access token |
+| `linkedin` | [LinkedIn](https://linkedin.com) | OAuth2 bearer token |
+| `ecency` | [Ecency](https://ecency.com) (Hive blockchain) | Hive posting key |
+
+> **Note:** Medium, Reddit, Threads, LinkedIn, and Ecency credentials can be pre-configured in settings. Publishing support for these platforms is coming in upcoming releases.
 
 - **1 destination** — commands publish directly
 - **2+ destinations** — a picker modal lets you choose the target
@@ -132,8 +139,8 @@ syndication:
 | `metaDescription` | No | Empty |
 | `ogImage` | No | Empty |
 | `videoUrl` | No | Empty |
-| `canonicalUrl` | Auto-set | Generated from canonical base URL + slug |
-| `syndication` | Auto-set | Written back after each successful publish |
+| `canonicalUrl` | No | Auto-generated from canonical base URL + slug; set explicitly in frontmatter to override |
+| `syndication` | Auto-set | Written back (and kept current) after each successful publish |
 
 ### Syndication Tracking
 
@@ -219,139 +226,16 @@ Learn more: [indieweb.org](https://indieweb.org) · [indieweb.org/POSSE](https:/
 
 [MIT](LICENSE) — Devin Marshall
 
-
-## Installation
-
-### From Community Plugins (Recommended)
-
-1. Open **Settings → Community plugins → Browse**
-2. Search for **"Publish Blog to Web"**
-3. Click **Install**, then **Enable**
-
-### Manual Install
-
-1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/TheOfficialDM/Publish-Blog-to-Web/releases/latest)
-2. Create a folder at `<vault>/.obsidian/plugins/publish-blog-to-web/`
-3. Copy the downloaded files into that folder
-4. Restart Obsidian and enable the plugin under **Settings → Community Plugins**
-
-### Build from Source
-
-```bash
-git clone https://github.com/TheOfficialDM/Publish-Blog-to-Web.git
-cd Publish-Blog-to-Web
-npm install
-npm run build
-```
-
-Copy `main.js`, `manifest.json`, and `styles.css` into your vault's plugins folder.
-
-## Setup
-
-1. Open **Settings → Publish Blog to Web**
-2. Click **Add Site** and enter a name, URL, and API key
-3. Click **Test Connection** to verify connectivity
-4. Start publishing!
-
-## Multi-Site Support
-
-Add as many sites as you need in Settings. Each site has its own name, URL, and API key.
-
-- **1 site configured** — commands publish directly
-- **2+ sites configured** — a picker modal lets you choose the target
-
-To add publishing to a new project, deploy the same `/api/publish` route and set a `PUBLISH_API_KEY` in that project's `.env.local`. Copy that value into the plugin settings.
-
-Generate a new API key with:
-
-```
--join ((1..32) | ForEach-Object { '{0:x2}' -f (Get-Random -Max 256) })
-```
-
-## Commands
-
-| Command | Behaviour |
-|---------|-----------|
-| **Publish to Blog** | Uses frontmatter `status` or the default from settings |
-| **Publish as Draft** | Forces `status: draft` regardless of frontmatter |
-| **Publish Live** | Forces `status: published` regardless of frontmatter |
-| **Insert Frontmatter Template** | Inserts a YAML template with all supported fields |
-
-A **ribbon icon** (paper plane) is also available for one-click publishing.
-
-## Frontmatter
-
-Add YAML frontmatter to control post metadata:
-
-```yaml
 ---
-title: My Post Title
-slug: my-post-title
-excerpt: A short summary
-type: blog
-status: draft
-tags: [javascript, web]
-pillar: Technology
-coverImage: https://example.com/image.jpg
-featured: false
-metaTitle: SEO Title Override
-metaDescription: SEO description for search results
-ogImage: https://example.com/og.jpg
-videoUrl: https://youtube.com/watch?v=example
----
-```
 
-| Field | Required | Default |
-|-------|----------|---------|
-| `title` | No | File name |
-| `slug` | No | Auto-generated from title |
-| `status` | No | Plugin default setting |
-| `type` | No | `blog` |
-| `excerpt` | No | Empty |
-| `tags` | No | `[]` |
-| `pillar` | No | Empty |
-| `coverImage` | No | Empty |
-| `featured` | No | `false` |
-| `metaTitle` | No | Empty |
-| `metaDescription` | No | Empty |
-| `ogImage` | No | Empty |
-| `videoUrl` | No | Empty |
+## Support
 
-## Obsidian Syntax Handling
+POSSE Publisher is free and open source. If it saves you time, a small contribution helps support continued development.
 
-By default, the plugin pre-processes content before publishing:
+| | |
+|---|---|
+| ☕ **Buy Me a Coffee** | [buymeacoffee.com/theofficaldm](https://buymeacoffee.com/theofficaldm) |
+| ❤ **GitHub Sponsors** | [github.com/sponsors/TheOfficialDM](https://github.com/sponsors/TheOfficialDM) |
+| 🔗 **All options** | [devinmarshall.info/fund](https://devinmarshall.info/fund) |
 
-- `[[wiki-links]]` → converted to plain text
-- `[[target|alias]]` → converted to the alias text
-- `![[embeds]]` → removed
-- `%%comments%%` → removed
-- `` ```dataview `` / `` ```dataviewjs `` blocks → removed
-
-This can be toggled off in settings if your API handles Obsidian markdown natively.
-
-## Upsert Behaviour
-
-Publishing a note with the same slug as an existing entry will **update** that entry instead of creating a duplicate.
-
-## API Contract
-
-Your site's `/api/publish` endpoint should:
-
-- Accept `POST` requests with a JSON body
-- Authenticate via the `x-publish-key` header
-- Return `2xx` on success, with optional `{ "upserted": true }` in the response body
-- Return `4xx`/`5xx` on failure, with optional `{ "error": "message" }` in the response body
-
-## Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| "Open a markdown file first" | Make sure you have a `.md` file active in the editor |
-| Publish fails with 401/403 | Check your API key matches the `PUBLISH_API_KEY` in the site's `.env.local` |
-| Content appears empty | Ensure you have content below the YAML frontmatter fence |
-| Wiki-links appear in published posts | Enable "Strip Obsidian Syntax" in plugin settings |
-| Connection test fails | Verify the site URL is correct and the server is running |
-
-## License
-
-[MIT](LICENSE) — Devin Marshall
+![Buy Me a Coffee QR](assets/bmac-qr.png)

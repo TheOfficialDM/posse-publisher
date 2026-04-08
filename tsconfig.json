@@ -8,7 +8,6 @@
     "skipLibCheck": true,
     "outDir": "./dist",
     "rootDir": "./",
-    "baseUrl": ".",
     "lib": ["ES2020", "DOM"]
   },
   "include": ["*.ts"]
