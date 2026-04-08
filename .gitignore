@@ -3,3 +3,9 @@ data.json
 dist/
 .DS_Store
 *.map
+.github
+
+# agents
+.CLAUDE
+
+
