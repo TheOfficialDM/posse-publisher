@@ -879,10 +879,10 @@ class PossePublisherSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl("h2", { text: "Your Canonical Site" });
+    new Setting(containerEl).setName("Your canonical site").setHeading();
 
     new Setting(containerEl)
-      .setName("Canonical Base URL")
+      .setName("Canonical base URL")
       .setDesc("Your own site's root URL. Every published post will include a canonicalUrl pointing here — the original you own.")
       .addText((text) =>
         text
@@ -897,18 +897,16 @@ class PossePublisherSettingTab extends PluginSettingTab {
           }),
       );
 
-    containerEl.createEl("h2", { text: "Destinations" });
+    new Setting(containerEl).setName("Destinations").setHeading();
 
     this.plugin.settings.destinations.forEach((destination, index) => {
       const destContainer = containerEl.createDiv({
         cls: "posse-publisher-site",
       });
-      destContainer.createEl("h3", {
-        text: destination.name || `Destination ${index + 1}`,
-      });
+      new Setting(destContainer).setName(destination.name || `Destination ${index + 1}`).setHeading();
 
       new Setting(destContainer)
-        .setName("Destination Name")
+        .setName("Destination name")
         .setDesc("A label for this destination (e.g. My Blog)")
         .addText((text) =>
           text
@@ -1003,7 +1001,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
               }),
           );
         new Setting(destContainer)
-          .setName("Access Token")
+          .setName("Access token")
           .setDesc("From your Mastodon account: Settings → Development → New Application")
           .addText((text) => {
             text
@@ -1018,7 +1016,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
           });
       } else if (destType === "bluesky") {
         new Setting(destContainer)
-          .setName("Bluesky Handle")
+          .setName("Bluesky handle")
           .setDesc("Your handle (e.g. yourname.bsky.social)")
           .addText((text) =>
             text
@@ -1030,7 +1028,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
               }),
           );
         new Setting(destContainer)
-          .setName("App Password")
+          .setName("App password")
           .setDesc("From https://bsky.app/settings/app-passwords — NOT your login password")
           .addText((text) => {
             text
@@ -1044,12 +1042,11 @@ class PossePublisherSettingTab extends PluginSettingTab {
             text.inputEl.autocomplete = "off";
           });
       } else if (destType === "medium") {
-        destContainer.createEl("p", {
-          text: "Note: The Medium API was archived in March 2023. It may still work but could be discontinued at any time.",
-          cls: "setting-item-description mod-warning",
-        });
         new Setting(destContainer)
-          .setName("Integration Token")
+          .setName("Medium API notice")
+          .setDesc("The Medium API was archived in March 2023. It may still work but could be discontinued at any time.");
+        new Setting(destContainer)
+          .setName("Integration token")
           .setDesc("From medium.com → Settings → Security and apps → Integration tokens")
           .addText((text) => {
             text
@@ -1076,7 +1073,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
               }),
           );
         new Setting(destContainer)
-          .setName("Client Secret")
+          .setName("Client secret")
           .addText((text) => {
             text
               .setPlaceholder("Client secret")
@@ -1089,7 +1086,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
             text.inputEl.autocomplete = "off";
           });
         new Setting(destContainer)
-          .setName("Refresh Token")
+          .setName("Refresh token")
           .setDesc("OAuth2 refresh token for your Reddit account")
           .addText((text) => {
             text
@@ -1103,7 +1100,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
             text.inputEl.autocomplete = "off";
           });
         new Setting(destContainer)
-          .setName("Reddit Username")
+          .setName("Reddit username")
           .addText((text) =>
             text
               .setPlaceholder("u/yourname")
@@ -1114,7 +1111,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
               }),
           );
         new Setting(destContainer)
-          .setName("Default Subreddit")
+          .setName("Default subreddit")
           .setDesc("e.g. r/webdev — can be overridden per note with \"subreddit:\" frontmatter")
           .addText((text) =>
             text
@@ -1127,7 +1124,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
           );
       } else if (destType === "threads") {
         new Setting(destContainer)
-          .setName("Threads User ID")
+          .setName("Threads user ID")
           .setDesc("Your numeric Threads/Instagram user ID")
           .addText((text) =>
             text
@@ -1139,7 +1136,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
               }),
           );
         new Setting(destContainer)
-          .setName("Access Token")
+          .setName("Access token")
           .setDesc("Long-lived Threads access token with threads_content_publish permission")
           .addText((text) => {
             text
@@ -1154,7 +1151,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
           });
       } else if (destType === "linkedin") {
         new Setting(destContainer)
-          .setName("Access Token")
+          .setName("Access token")
           .setDesc("OAuth2 bearer token with w_member_social scope")
           .addText((text) => {
             text
@@ -1181,7 +1178,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
           );
       } else if (destType === "ecency") {
         new Setting(destContainer)
-          .setName("Hive Username")
+          .setName("Hive username")
           .setDesc("Your Hive/Ecency account name (without @)")
           .addText((text) =>
             text
@@ -1193,7 +1190,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
               }),
           );
         new Setting(destContainer)
-          .setName("Posting Key")
+          .setName("Posting key")
           .setDesc("Your Hive private posting key (not the owner or active key)")
           .addText((text) => {
             text
@@ -1222,7 +1219,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
 
       new Setting(destContainer)
         .addButton((btn) =>
-          btn.setButtonText("Test Connection").onClick(async () => {
+          btn.setButtonText("Test connection").onClick(async () => {
             if (!this.plugin.hasValidCredentials(destination)) {
               new Notice("Configure credentials first");
               return;
@@ -1250,7 +1247,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
         )
         .addButton((btn) =>
           btn
-            .setButtonText("Remove Destination")
+            .setButtonText("Remove destination")
             .setWarning()
             .onClick(async () => {
               const confirmEl = destContainer.createDiv({
@@ -1277,7 +1274,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .addButton((btn) =>
         btn
-          .setButtonText("Add Destination")
+          .setButtonText("Add destination")
           .setCta()
           .onClick(async () => {
             this.plugin.settings.destinations.push({
@@ -1291,10 +1288,10 @@ class PossePublisherSettingTab extends PluginSettingTab {
           }),
       );
 
-    containerEl.createEl("h2", { text: "Defaults" });
+    new Setting(containerEl).setName("Defaults").setHeading();
 
     new Setting(containerEl)
-      .setName("Default Status")
+      .setName("Default status")
       .setDesc("Default publish status when not specified in frontmatter")
       .addDropdown((dropdown) =>
         dropdown
@@ -1310,7 +1307,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Confirm Before Publishing")
+      .setName("Confirm before publishing")
       .setDesc("Show a confirmation modal with post details before publishing")
       .addToggle((toggle) =>
         toggle
@@ -1322,7 +1319,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Strip Obsidian Syntax")
+      .setName("Strip Obsidian syntax")
       .setDesc(
         "Convert wiki-links, remove embeds, comments, and dataview blocks before publishing",
       )
@@ -1336,7 +1333,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
       );
 
     /* ── Support section ── */
-    containerEl.createEl("h2", { text: "Support POSSE Publisher" });
+    new Setting(containerEl).setName("Support POSSE Publisher").setHeading();
     containerEl.createEl("p", {
       text: "POSSE Publisher is free and open source. If it saves you time, consider supporting its development.",
       cls: "setting-item-description",
@@ -1361,7 +1358,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("All Funding Options")
+      .setName("All funding options")
       .setDesc("devinmarshall.info/fund")
       .addButton((btn) =>
         btn.setButtonText("\uD83D\uDD17 Fund").onClick(() => {

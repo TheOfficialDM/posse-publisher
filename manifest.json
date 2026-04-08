@@ -3,7 +3,7 @@
   "name": "POSSE Publisher",
   "version": "2.1.0",
   "minAppVersion": "0.15.0",
-  "description": "Publish on your Own Site, Syndicate Elsewhere. POSSE Publisher syndicates your Obsidian notes to your canonical site and platforms including Dev.to, Mastodon, and Bluesky — with Medium, Reddit, Threads, LinkedIn, and Ecency support coming soon.",
+  "description": "Syndicate your Obsidian notes to your own site and platforms including Dev.to, Mastodon, and Bluesky using the IndieWeb POSSE pattern. Medium, Reddit, Threads, LinkedIn, and Ecency coming soon.",
   "author": "Devin Marshall",
   "authorUrl": "https://github.com/TheOfficialDM",
   "fundingUrl": "https://github.com/sponsors/TheOfficialDM",
