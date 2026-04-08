@@ -296,31 +296,31 @@ export default class PossePublisherPlugin extends Plugin {
 
     this.statusBarEl = this.addStatusBarItem();
 
-    this.addRibbonIcon("send", "POSSE Publish", () => {
+    this.addRibbonIcon("send", "POSSE publish", () => {
       this.pickSiteAndPublish();
     });
 
     this.addCommand({
       id: "posse-publish",
-      name: "POSSE Publish",
+      name: "POSSE publish",
       callback: () => this.pickSiteAndPublish(),
     });
 
     this.addCommand({
       id: "posse-publish-draft",
-      name: "POSSE Publish as Draft",
+      name: "POSSE publish as draft",
       callback: () => this.pickSiteAndPublish("draft"),
     });
 
     this.addCommand({
       id: "posse-publish-live",
-      name: "POSSE Publish Live",
+      name: "POSSE publish live",
       callback: () => this.pickSiteAndPublish("published"),
     });
 
     this.addCommand({
       id: "posse-insert-template",
-      name: "POSSE Insert Frontmatter Template",
+      name: "POSSE insert frontmatter template",
       editorCallback: (editor) => {
         const content = editor.getValue();
         if (content.trimStart().startsWith("---")) {
@@ -336,13 +336,13 @@ export default class PossePublisherPlugin extends Plugin {
 
     this.addCommand({
       id: "posse-to-all",
-      name: "POSSE to All Destinations",
+      name: "POSSE to all destinations",
       callback: () => this.posseToAll(),
     });
 
     this.addCommand({
       id: "posse-status",
-      name: "POSSE Status — View Syndication",
+      name: "POSSE status — view syndication",
       callback: () => this.posseStatus(),
     });
 
@@ -361,20 +361,20 @@ export default class PossePublisherPlugin extends Plugin {
       this.settings.destinations = [
         {
           name: "Default",
-          type: "custom-api" as DestinationType,
-          url: raw.siteUrl as string,
+          type: "custom-api",
+          url: raw.siteUrl,
           apiKey: (raw.apiKey as string) || "",
         },
       ];
       delete raw.siteUrl;
       delete raw.apiKey;
-      this.saveSettings();
+      void this.saveSettings();
     }
     // Migrate sites → destinations key
     if (Array.isArray(raw.sites) && !Array.isArray(this.settings.destinations)) {
       this.settings.destinations = raw.sites as Destination[];
       delete raw.sites;
-      this.saveSettings();
+      void this.saveSettings();
     }
   }
 
@@ -392,15 +392,15 @@ export default class PossePublisherPlugin extends Plugin {
   private pickSiteAndPublish(overrideStatus?: "draft" | "published") {
     const { destinations } = this.settings;
     if (destinations.length === 0) {
-      new Notice("Add at least one destination in POSSE Publisher settings");
+      new Notice("Add at least one destination in settings");
       return;
     }
     if (destinations.length === 1) {
-      this.preparePublish(destinations[0], overrideStatus);
+      void this.preparePublish(destinations[0], overrideStatus);
       return;
     }
     new SitePickerModal(this.app, destinations, (dest) => {
-      this.preparePublish(dest, overrideStatus);
+      void this.preparePublish(dest, overrideStatus);
     }).open();
   }
 
@@ -449,12 +449,12 @@ export default class PossePublisherPlugin extends Plugin {
   private async preparePublish(destination: Destination, overrideStatus?: "draft" | "published") {
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
     if (!view || !view.file) {
-      new Notice("Open a markdown file first");
+      new Notice("Open a Markdown file first");
       return;
     }
 
     if (!this.hasValidCredentials(destination)) {
-      new Notice(`Configure credentials for "${destination.name}" in POSSE Publisher settings`);
+      new Notice(`Configure credentials for "${destination.name}" in settings`);
       return;
     }
 
@@ -462,10 +462,10 @@ export default class PossePublisherPlugin extends Plugin {
 
     if (this.settings.confirmBeforePublish) {
       new ConfirmPublishModal(this.app, payload, destination, () => {
-        this.publishToDestination(destination, payload, view.file!);
+        void this.publishToDestination(destination, payload, view.file!);
       }).open();
     } else {
-      this.publishToDestination(destination, payload, view.file);
+      void this.publishToDestination(destination, payload, view.file);
     }
   }
 
@@ -709,16 +709,16 @@ export default class PossePublisherPlugin extends Plugin {
   private async posseToAll(overrideStatus?: "draft" | "published") {
     const { destinations } = this.settings;
     if (destinations.length === 0) {
-      new Notice("Add at least one destination in POSSE Publisher settings");
+      new Notice("Add at least one destination in settings");
       return;
     }
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
     if (!view || !view.file) {
-      new Notice("Open a markdown file first");
+      new Notice("Open a Markdown file first");
       return;
     }
     const payload = await this.buildPayload(view.file, overrideStatus);
-    new Notice(`POSSEing "${payload.title}" to ${destinations.length} destination(s)...`);
+    new Notice(`POSSEing "${String(payload.title)}" to ${destinations.length} destination(s)...`);
     for (const dest of destinations) {
       if (this.hasValidCredentials(dest)) {
         await this.publishToDestination(dest, payload, view.file);
@@ -769,7 +769,7 @@ export default class PossePublisherPlugin extends Plugin {
   private posseStatus() {
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
     if (!view || !view.file) {
-      new Notice("Open a markdown file first");
+      new Notice("Open a Markdown file first");
       return;
     }
     const fileCache = this.app.metadataCache.getFileCache(view.file);
@@ -808,10 +808,10 @@ class ConfirmPublishModal extends Modal {
     });
 
     const summary = contentEl.createDiv({ cls: "publish-summary" });
-    summary.createEl("div", { text: `Title: ${this.payload.title}` });
-    summary.createEl("div", { text: `Slug: ${this.payload.slug}` });
-    summary.createEl("div", { text: `Status: ${this.payload.status}` });
-    summary.createEl("div", { text: `Type: ${this.payload.type}` });
+    summary.createEl("div", { text: `Title: ${String(this.payload.title)}` });
+    summary.createEl("div", { text: `Slug: ${String(this.payload.slug)}` });
+    summary.createEl("div", { text: `Status: ${String(this.payload.status)}` });
+    summary.createEl("div", { text: `Type: ${String(this.payload.type)}` });
 
     const buttons = contentEl.createDiv({ cls: "modal-button-container" });
 
@@ -891,7 +891,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.plugin.settings.canonicalBaseUrl = value;
             if (value && !value.startsWith("https://") && !value.startsWith("http://localhost")) {
-              new Notice("Warning: Canonical Base URL should start with https://");
+              new Notice("Warning: canonical base URL should start with https://");
             }
             await this.plugin.saveSettings();
           }),
@@ -907,10 +907,10 @@ class PossePublisherSettingTab extends PluginSettingTab {
 
       new Setting(destContainer)
         .setName("Destination name")
-        .setDesc("A label for this destination (e.g. My Blog)")
+        .setDesc("A label for this destination (e.g. my blog)")
         .addText((text) =>
           text
-            .setPlaceholder("My Site")
+            .setPlaceholder("My site")
             .setValue(destination.name)
             .onChange(async (value) => {
               this.plugin.settings.destinations[index].name = value;
@@ -953,14 +953,14 @@ class PossePublisherSettingTab extends PluginSettingTab {
               .onChange(async (value) => {
                 this.plugin.settings.destinations[index].url = value;
                 if (value && !value.startsWith("https://") && !value.startsWith("http://localhost")) {
-                  new Notice("Warning: Destination URL should start with https://");
+                  new Notice("Warning: destination URL should start with https://");
                 }
                 await this.plugin.saveSettings();
               }),
           );
         new Setting(destContainer)
-          .setName("API Key")
-          .setDesc("PUBLISH_API_KEY from your site's environment")
+          .setName("API key")
+          .setDesc("`PUBLISH_API_KEY` from your site's environment")
           .addText((text) => {
             text
               .setPlaceholder("Enter API key")
@@ -974,7 +974,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
           });
       } else if (destType === "devto") {
         new Setting(destContainer)
-          .setName("Dev.to API Key")
+          .setName("Dev.to API key")
           .setDesc("From https://dev.to/settings/extensions")
           .addText((text) => {
             text
@@ -1002,7 +1002,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
           );
         new Setting(destContainer)
           .setName("Access token")
-          .setDesc("From your Mastodon account: Settings → Development → New Application")
+          .setDesc("From your Mastodon account: settings → development → new application")
           .addText((text) => {
             text
               .setPlaceholder("Enter access token")
@@ -1043,11 +1043,11 @@ class PossePublisherSettingTab extends PluginSettingTab {
           });
       } else if (destType === "medium") {
         new Setting(destContainer)
-          .setName("Medium API notice")
+          .setName("API notice")
           .setDesc("The Medium API was archived in March 2023. It may still work but could be discontinued at any time.");
         new Setting(destContainer)
           .setName("Integration token")
-          .setDesc("From medium.com → Settings → Security and apps → Integration tokens")
+          .setDesc("From medium.com → settings → security and apps → integration tokens")
           .addText((text) => {
             text
               .setPlaceholder("Enter Medium integration token")
@@ -1219,27 +1219,26 @@ class PossePublisherSettingTab extends PluginSettingTab {
 
       new Setting(destContainer)
         .addButton((btn) =>
-          btn.setButtonText("Test connection").onClick(async () => {
+          btn.setButtonText("Test connection").onClick(() => {
             if (!this.plugin.hasValidCredentials(destination)) {
               new Notice("Configure credentials first");
               return;
             }
             if (destType === "custom-api") {
-              try {
-                const url = `${destination.url.replace(/\/$/, "")}/api/publish`;
-                const response = await requestUrl({
-                  url,
-                  method: "OPTIONS",
-                  headers: { "x-publish-key": destination.apiKey },
-                });
+              const url = `${destination.url.replace(/\/$/, "")}/api/publish`;
+              requestUrl({
+                url,
+                method: "OPTIONS",
+                headers: { "x-publish-key": destination.apiKey },
+              }).then((response) => {
                 if (response.status >= 200 && response.status < 400) {
-                  new Notice(`✓ Connection to ${destination.name || destination.url} successful`);
+                  new Notice(`Connection to ${destination.name || destination.url} successful`);
                 } else {
-                  new Notice(`✗ ${destination.name || destination.url} responded with ${response.status}`);
+                  new Notice(`${destination.name || destination.url} responded with ${response.status}`);
                 }
-              } catch {
-                new Notice(`✗ Could not reach ${destination.name || destination.url}`);
-              }
+              }).catch(() => {
+                new Notice(`Could not reach ${destination.name || destination.url}`);
+              });
             } else {
               new Notice(`Credentials look configured for ${destination.name}. Publish to test.`);
             }
@@ -1249,7 +1248,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
           btn
             .setButtonText("Remove destination")
             .setWarning()
-            .onClick(async () => {
+            .onClick(() => {
               const confirmEl = destContainer.createDiv({
                 cls: "setting-item",
               });
@@ -1261,10 +1260,9 @@ class PossePublisherSettingTab extends PluginSettingTab {
                 cls: "mod-warning",
               });
               const noBtn = confirmEl.createEl("button", { text: "Cancel" });
-              yesBtn.addEventListener("click", async () => {
+              yesBtn.addEventListener("click", () => {
                 this.plugin.settings.destinations.splice(index, 1);
-                await this.plugin.saveSettings();
-                this.display();
+                void this.plugin.saveSettings().then(() => this.display());
               });
               noBtn.addEventListener("click", () => confirmEl.remove());
             }),
@@ -1276,15 +1274,14 @@ class PossePublisherSettingTab extends PluginSettingTab {
         btn
           .setButtonText("Add destination")
           .setCta()
-          .onClick(async () => {
+          .onClick(() => {
             this.plugin.settings.destinations.push({
               name: "",
               type: "custom-api",
               url: "",
               apiKey: "",
             });
-            await this.plugin.saveSettings();
-            this.display();
+            void this.plugin.saveSettings().then(() => this.display());
           }),
       );
 
@@ -1319,7 +1316,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Strip Obsidian syntax")
+      .setName("Strip wiki-links and embeds")
       .setDesc(
         "Convert wiki-links, remove embeds, comments, and dataview blocks before publishing",
       )
@@ -1333,26 +1330,26 @@ class PossePublisherSettingTab extends PluginSettingTab {
       );
 
     /* ── Support section ── */
-    new Setting(containerEl).setName("Support POSSE Publisher").setHeading();
+    new Setting(containerEl).setName("Support").setHeading();
     containerEl.createEl("p", {
-      text: "POSSE Publisher is free and open source. If it saves you time, consider supporting its development.",
+      text: "This plugin is free and open source. If it saves you time, consider supporting its development.",
       cls: "setting-item-description",
     });
 
     new Setting(containerEl)
-      .setName("Buy Me a Coffee")
+      .setName("Buy me a coffee")
       .setDesc("One-time or recurring support")
       .addButton((btn) =>
-        btn.setButtonText("\u2615 Support").onClick(() => {
+        btn.setButtonText("Support").onClick(() => {
           window.open("https://buymeacoffee.com/theofficaldm", "_blank");
         }),
       );
 
     new Setting(containerEl)
-      .setName("GitHub Sponsors")
+      .setName("GitHub sponsors")
       .setDesc("Monthly sponsorship through GitHub")
       .addButton((btn) =>
-        btn.setButtonText("\u2764 Sponsor").onClick(() => {
+        btn.setButtonText("Sponsor").onClick(() => {
           window.open("https://github.com/sponsors/TheOfficialDM", "_blank");
         }),
       );
@@ -1361,7 +1358,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
       .setName("All funding options")
       .setDesc("devinmarshall.info/fund")
       .addButton((btn) =>
-        btn.setButtonText("\uD83D\uDD17 Fund").onClick(() => {
+        btn.setButtonText("View").onClick(() => {
           window.open("https://devinmarshall.info/fund", "_blank");
         }),
       );
@@ -1374,7 +1371,7 @@ type SyndicationEntry = { url?: string; name?: string };
 
 class PosseStatusModal extends Modal {
   private title: string;
-  private syndication: SyndicationEntry[] | unknown;
+  private syndication: unknown;
 
   constructor(app: App, title: string, syndication: unknown) {
     super(app);
@@ -1385,8 +1382,8 @@ class PosseStatusModal extends Modal {
   onOpen() {
     const { contentEl } = this;
     contentEl.addClass("posse-publisher-confirm-modal");
-    contentEl.createEl("h3", { text: "POSSE Status" });
-    contentEl.createEl("p", { text: `Note: ${this.title}` });
+    contentEl.createEl("h3", { text: "POSSE status" });
+    contentEl.createEl("p", { text: `Note: ${String(this.title)}` });
 
     const entries = Array.isArray(this.syndication)
       ? (this.syndication as SyndicationEntry[])
