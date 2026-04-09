@@ -931,7 +931,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
             .addOption("reddit", "Reddit")
             .addOption("threads", "Threads")
             .addOption("linkedin", "LinkedIn")
-            .addOption("ecency", "Ecency (hive)")
+            .addOption("ecency", "Hive")
             .setValue(destination.type || "custom-api")
             .onChange(async (value) => {
               this.plugin.settings.destinations[index].type = value as DestinationType;
@@ -1087,7 +1087,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
           });
         new Setting(destContainer)
           .setName("Refresh token")
-          .setDesc("OAuth refresh token for your Reddit account")
+          .setDesc("Authorization refresh token for your Reddit account")
           .addText((text) => {
             text
               .setPlaceholder("Refresh token")
@@ -1152,7 +1152,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
       } else if (destType === "linkedin") {
         new Setting(destContainer)
           .setName("Access token")
-          .setDesc("OAuth bearer token with w_member_social scope")
+          .setDesc("Authorization bearer token with w_member_social scope")
           .addText((text) => {
             text
               .setPlaceholder("Enter access token")
@@ -1165,8 +1165,8 @@ class PossePublisherSettingTab extends PluginSettingTab {
             text.inputEl.autocomplete = "off";
           });
         new Setting(destContainer)
-          .setName("Person URN")
-          .setDesc("Your LinkedIn member URN")
+          .setName("Person identifier")
+          .setDesc("Your LinkedIn member identifier")
           .addText((text) =>
             text
               .setPlaceholder("Urn:li:person:...")
