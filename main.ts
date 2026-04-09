@@ -296,31 +296,31 @@ export default class PossePublisherPlugin extends Plugin {
 
     this.statusBarEl = this.addStatusBarItem();
 
-    this.addRibbonIcon("send", "POSSE publish", () => {
+    this.addRibbonIcon("send", "Posse publish", () => {
       this.pickSiteAndPublish();
     });
 
     this.addCommand({
       id: "posse-publish",
-      name: "POSSE publish",
+      name: "Posse publish",
       callback: () => this.pickSiteAndPublish(),
     });
 
     this.addCommand({
       id: "posse-publish-draft",
-      name: "POSSE publish as draft",
+      name: "Posse publish as draft",
       callback: () => this.pickSiteAndPublish("draft"),
     });
 
     this.addCommand({
       id: "posse-publish-live",
-      name: "POSSE publish live",
+      name: "Posse publish live",
       callback: () => this.pickSiteAndPublish("published"),
     });
 
     this.addCommand({
       id: "posse-insert-template",
-      name: "POSSE insert frontmatter template",
+      name: "Posse insert frontmatter template",
       editorCallback: (editor) => {
         const content = editor.getValue();
         if (content.trimStart().startsWith("---")) {
@@ -336,13 +336,13 @@ export default class PossePublisherPlugin extends Plugin {
 
     this.addCommand({
       id: "posse-to-all",
-      name: "POSSE to all destinations",
+      name: "Posse to all destinations",
       callback: () => this.posseToAll(),
     });
 
     this.addCommand({
       id: "posse-status",
-      name: "POSSE status — view syndication",
+      name: "Posse status — view syndication",
       callback: () => this.posseStatus(),
     });
 
@@ -802,7 +802,7 @@ class ConfirmPublishModal extends Modal {
     const { contentEl } = this;
     contentEl.addClass("posse-publisher-confirm-modal");
 
-    contentEl.createEl("h3", { text: "Confirm POSSE" });
+    contentEl.createEl("h3", { text: "Confirm posse" });
     contentEl.createEl("p", {
       text: `You are about to POSSE to ${this.destination.name}:`,
     });
@@ -843,7 +843,7 @@ class SitePickerModal extends SuggestModal<Destination> {
     super(app);
     this.destinations = destinations;
     this.onChoose = onChoose;
-    this.setPlaceholder("Choose a destination to POSSE to...");
+    this.setPlaceholder("Choose a destination to posse to...");
   }
 
   getSuggestions(query: string): Destination[] {
@@ -891,7 +891,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.plugin.settings.canonicalBaseUrl = value;
             if (value && !value.startsWith("https://") && !value.startsWith("http://localhost")) {
-              new Notice("Warning: canonical base URL should start with https://");
+              new Notice("Warning: canonical base URL should start with HTTPS://");
             }
             await this.plugin.saveSettings();
           }),
@@ -907,7 +907,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
 
       new Setting(destContainer)
         .setName("Destination name")
-        .setDesc("A label for this destination (e.g. my blog)")
+        .setDesc("A label for this destination (e.g. My blog)")
         .addText((text) =>
           text
             .setPlaceholder("My site")
@@ -931,7 +931,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
             .addOption("reddit", "Reddit")
             .addOption("threads", "Threads")
             .addOption("linkedin", "LinkedIn")
-            .addOption("ecency", "Ecency (Hive)")
+            .addOption("ecency", "Ecency (hive)")
             .setValue(destination.type || "custom-api")
             .onChange(async (value) => {
               this.plugin.settings.destinations[index].type = value as DestinationType;
@@ -945,7 +945,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
       if (destType === "custom-api") {
         new Setting(destContainer)
           .setName("Site URL")
-          .setDesc("Your site's base URL (must start with https://)")
+          .setDesc("Your site's base URL (must start with HTTPS://)")
           .addText((text) =>
             text
               .setPlaceholder("https://example.com")
@@ -953,7 +953,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
               .onChange(async (value) => {
                 this.plugin.settings.destinations[index].url = value;
                 if (value && !value.startsWith("https://") && !value.startsWith("http://localhost")) {
-                  new Notice("Warning: destination URL should start with https://");
+                  new Notice("Warning: destination URL should start with HTTPS://");
                 }
                 await this.plugin.saveSettings();
               }),
@@ -978,7 +978,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
           .setDesc("From https://dev.to/settings/extensions")
           .addText((text) => {
             text
-              .setPlaceholder("Enter Dev.to API key")
+              .setPlaceholder("Enter dev.to API key")
               .setValue(destination.apiKey || "")
               .onChange(async (value) => {
                 this.plugin.settings.destinations[index].apiKey = value;
@@ -993,7 +993,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
           .setDesc("Your Mastodon instance (e.g. https://mastodon.social)")
           .addText((text) =>
             text
-              .setPlaceholder("https://mastodon.social")
+              .setPlaceholder("HTTPS://mastodon.social")
               .setValue(destination.instanceUrl || "")
               .onChange(async (value) => {
                 this.plugin.settings.destinations[index].instanceUrl = value;
@@ -1002,7 +1002,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
           );
         new Setting(destContainer)
           .setName("Access token")
-          .setDesc("From your Mastodon account: settings → development → new application")
+          .setDesc("From your mastodon account: settings → development → new application")
           .addText((text) => {
             text
               .setPlaceholder("Enter access token")
@@ -1017,10 +1017,10 @@ class PossePublisherSettingTab extends PluginSettingTab {
       } else if (destType === "bluesky") {
         new Setting(destContainer)
           .setName("Bluesky handle")
-          .setDesc("Your handle (e.g. yourname.bsky.social)")
+          .setDesc("Your handle (e.g. Yourname.bsky.social)")
           .addText((text) =>
             text
-              .setPlaceholder("yourname.bsky.social")
+              .setPlaceholder("Yourname.bsky.social")
               .setValue(destination.handle || "")
               .onChange(async (value) => {
                 this.plugin.settings.destinations[index].handle = value;
@@ -1032,7 +1032,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
           .setDesc("From https://bsky.app/settings/app-passwords — NOT your login password")
           .addText((text) => {
             text
-              .setPlaceholder("xxxx-xxxx-xxxx-xxxx")
+              .setPlaceholder("Xxxx-xxxx-xxxx-xxxx")
               .setValue(destination.appPassword || "")
               .onChange(async (value) => {
                 this.plugin.settings.destinations[index].appPassword = value;
@@ -1044,13 +1044,13 @@ class PossePublisherSettingTab extends PluginSettingTab {
       } else if (destType === "medium") {
         new Setting(destContainer)
           .setName("API notice")
-          .setDesc("The Medium API was archived in March 2023. It may still work but could be discontinued at any time.");
+          .setDesc("The medium API was archived in march 2023. It may still work but could be discontinued at any time.");
         new Setting(destContainer)
           .setName("Integration token")
           .setDesc("From medium.com → settings → security and apps → integration tokens")
           .addText((text) => {
             text
-              .setPlaceholder("Enter Medium integration token")
+              .setPlaceholder("Enter medium integration token")
               .setValue(destination.mediumToken || "")
               .onChange(async (value) => {
                 this.plugin.settings.destinations[index].mediumToken = value;
@@ -1103,7 +1103,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
           .setName("Reddit username")
           .addText((text) =>
             text
-              .setPlaceholder("u/yourname")
+              .setPlaceholder("U/yourname")
               .setValue(destination.redditUsername || "")
               .onChange(async (value) => {
                 this.plugin.settings.destinations[index].redditUsername = value;
@@ -1115,7 +1115,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
           .setDesc("e.g. r/webdev — can be overridden per note with \"subreddit:\" frontmatter")
           .addText((text) =>
             text
-              .setPlaceholder("r/subredditname")
+              .setPlaceholder("R/subredditname")
               .setValue(destination.redditDefaultSubreddit || "")
               .onChange(async (value) => {
                 this.plugin.settings.destinations[index].redditDefaultSubreddit = value;
@@ -1125,7 +1125,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
       } else if (destType === "threads") {
         new Setting(destContainer)
           .setName("Threads user ID")
-          .setDesc("Your numeric Threads/Instagram user ID")
+          .setDesc("Your numeric threads/instagram user ID")
           .addText((text) =>
             text
               .setPlaceholder("123456789")
@@ -1137,7 +1137,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
           );
         new Setting(destContainer)
           .setName("Access token")
-          .setDesc("Long-lived Threads access token with threads_content_publish permission")
+          .setDesc("Long-lived threads access token with threads_content_publish permission")
           .addText((text) => {
             text
               .setPlaceholder("Enter access token")
@@ -1165,11 +1165,11 @@ class PossePublisherSettingTab extends PluginSettingTab {
             text.inputEl.autocomplete = "off";
           });
         new Setting(destContainer)
-          .setName("Person URN")
-          .setDesc("Your LinkedIn member URN, e.g. urn:li:person:abc123")
+          .setName("Person urn")
+          .setDesc("Your LinkedIn member urn, e.g. Urn:li:person:abc123")
           .addText((text) =>
             text
-              .setPlaceholder("urn:li:person:...")
+              .setPlaceholder("Urn:li:person:...")
               .setValue(destination.linkedinPersonUrn || "")
               .onChange(async (value) => {
                 this.plugin.settings.destinations[index].linkedinPersonUrn = value;
@@ -1179,10 +1179,10 @@ class PossePublisherSettingTab extends PluginSettingTab {
       } else if (destType === "ecency") {
         new Setting(destContainer)
           .setName("Hive username")
-          .setDesc("Your Hive/Ecency account name (without @)")
+          .setDesc("Your hive/ecency account name (without @)")
           .addText((text) =>
             text
-              .setPlaceholder("yourusername")
+              .setPlaceholder("Yourusername")
               .setValue(destination.hiveUsername || "")
               .onChange(async (value) => {
                 this.plugin.settings.destinations[index].hiveUsername = value;
@@ -1191,10 +1191,10 @@ class PossePublisherSettingTab extends PluginSettingTab {
           );
         new Setting(destContainer)
           .setName("Posting key")
-          .setDesc("Your Hive private posting key (not the owner or active key)")
+          .setDesc("Your hive private posting key (not the owner or active key)")
           .addText((text) => {
             text
-              .setPlaceholder("5K...")
+              .setPlaceholder("5k...")
               .setValue(destination.hivePostingKey || "")
               .onChange(async (value) => {
                 this.plugin.settings.destinations[index].hivePostingKey = value;
@@ -1205,10 +1205,10 @@ class PossePublisherSettingTab extends PluginSettingTab {
           });
         new Setting(destContainer)
           .setName("Community")
-          .setDesc("Hive community tag to post in (e.g. hive-174301 for OCD)")
+          .setDesc("Hive community tag to post in (e.g. Hive-174301 for ocd)")
           .addText((text) =>
             text
-              .setPlaceholder("hive-174301")
+              .setPlaceholder("Hive-174301")
               .setValue(destination.hiveCommunity || "")
               .onChange(async (value) => {
                 this.plugin.settings.destinations[index].hiveCommunity = value;
@@ -1382,7 +1382,7 @@ class PosseStatusModal extends Modal {
   onOpen() {
     const { contentEl } = this;
     contentEl.addClass("posse-publisher-confirm-modal");
-    contentEl.createEl("h3", { text: "POSSE status" });
+    contentEl.createEl("h3", { text: "Posse status" });
     contentEl.createEl("p", { text: `Note: ${String(this.title)}` });
 
     const entries = Array.isArray(this.syndication)
