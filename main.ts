@@ -883,7 +883,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Canonical base URL")
-      .setDesc("Your own site's root URL. Every published post will include a canonicalUrl pointing here — the original you own.")
+      .setDesc("Your own site's root URL. Every published post will include a canonical URL pointing here — the original you own.")
       .addText((text) =>
         text
           .setPlaceholder("https://yoursite.com")
@@ -1087,7 +1087,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
           });
         new Setting(destContainer)
           .setName("Refresh token")
-          .setDesc("OAuth2 refresh token for your Reddit account")
+          .setDesc("OAuth refresh token for your Reddit account")
           .addText((text) => {
             text
               .setPlaceholder("Refresh token")
@@ -1152,7 +1152,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
       } else if (destType === "linkedin") {
         new Setting(destContainer)
           .setName("Access token")
-          .setDesc("OAuth2 bearer token with w_member_social scope")
+          .setDesc("OAuth bearer token with w_member_social scope")
           .addText((text) => {
             text
               .setPlaceholder("Enter access token")
@@ -1165,8 +1165,8 @@ class PossePublisherSettingTab extends PluginSettingTab {
             text.inputEl.autocomplete = "off";
           });
         new Setting(destContainer)
-          .setName("Person urn")
-          .setDesc("Your LinkedIn member urn, e.g. Urn:li:person:abc123")
+          .setName("Person URN")
+          .setDesc("Your LinkedIn member URN")
           .addText((text) =>
             text
               .setPlaceholder("Urn:li:person:...")
@@ -1391,7 +1391,7 @@ class PosseStatusModal extends Modal {
 
     if (entries.length === 0) {
       contentEl.createEl("p", {
-        text: "This note has not been POSSEd to any destination yet.",
+        text: "This note has not been syndicated to any destination yet.",
       });
     } else {
       contentEl.createEl("strong", { text: `Syndicated to ${entries.length} destination(s):` });
