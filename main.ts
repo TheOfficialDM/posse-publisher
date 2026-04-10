@@ -931,7 +931,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
             .addOption("reddit", "Reddit")
             .addOption("threads", "Threads")
             .addOption("linkedin", "LinkedIn")
-            .addOption("ecency", "Hive")
+            .addOption("ecency", "ecency")
             .setValue(destination.type || "custom-api")
             .onChange(async (value) => {
               this.plugin.settings.destinations[index].type = value as DestinationType;
@@ -1169,7 +1169,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
           .setDesc("Your LinkedIn member identifier")
           .addText((text) =>
             text
-              .setPlaceholder("Urn:li:person:...")
+              .setPlaceholder("urn:li:person:...")
               .setValue(destination.linkedinPersonUrn || "")
               .onChange(async (value) => {
                 this.plugin.settings.destinations[index].linkedinPersonUrn = value;
