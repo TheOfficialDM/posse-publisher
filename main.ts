@@ -931,7 +931,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
             .addOption("reddit", "Reddit")
             .addOption("threads", "Threads")
             .addOption("linkedin", "LinkedIn")
-            .addOption("ecency", "ecency")
+            .addOption("ecency", "Ecency")
             .setValue(destination.type || "custom-api")
             .onChange(async (value) => {
               this.plugin.settings.destinations[index].type = value as DestinationType;
@@ -1179,7 +1179,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
       } else if (destType === "ecency") {
         new Setting(destContainer)
           .setName("Hive username")
-          .setDesc("Your hive/ecency account name (without @)")
+          .setDesc("Your Hive account name (without @)")
           .addText((text) =>
             text
               .setPlaceholder("Yourusername")
@@ -1191,7 +1191,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
           );
         new Setting(destContainer)
           .setName("Posting key")
-          .setDesc("Your hive private posting key (not the owner or active key)")
+          .setDesc("Your Hive private posting key (not the owner or active key)")
           .addText((text) => {
             text
               .setPlaceholder("5k...")
