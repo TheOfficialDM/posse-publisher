@@ -37,6 +37,7 @@ export default defineConfig([
     languageOptions: {
       parser: tsparser,
       parserOptions: { project: "./tsconfig.json" },
+      globals: { window: "readonly" },
     },
     rules: {
       "obsidianmd/ui/sentence-case": ["error", {

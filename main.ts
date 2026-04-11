@@ -1169,7 +1169,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
           .setDesc("Your LinkedIn member identifier")
           .addText((text) =>
             text
-              .setPlaceholder("urn:li:person:...")
+              .setPlaceholder("Urn:li:person:...")
               .setValue(destination.linkedinPersonUrn || "")
               .onChange(async (value) => {
                 this.plugin.settings.destinations[index].linkedinPersonUrn = value;
@@ -1182,7 +1182,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
           .setDesc("Your Hive account name (without @)")
           .addText((text) =>
             text
-              .setPlaceholder("Yourusername")
+              .setPlaceholder("Your Hive username")
               .setValue(destination.hiveUsername || "")
               .onChange(async (value) => {
                 this.plugin.settings.destinations[index].hiveUsername = value;
