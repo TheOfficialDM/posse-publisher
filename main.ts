@@ -178,7 +178,7 @@ export function markdownToHtml(markdown: string): string {
   let html = markdown;
 
   // Fenced code blocks (process first to avoid mangling their contents)
-  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) =>
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_: string, lang: string, code: string) =>
     `<pre><code${lang ? ` class="language-${lang}"` : ""}>${escapeHtml(code.trim())}</code></pre>`
   );
 
@@ -379,7 +379,7 @@ export default class PossePublisherPlugin extends Plugin {
   }
 
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<PossePublisherSettings>);
     if (!Array.isArray(this.settings.destinations)) {
       this.settings.destinations = [];
     }
@@ -516,12 +516,16 @@ export default class PossePublisherPlugin extends Plugin {
       });
       if (response.status >= 200 && response.status < 300) {
         let verb = "POSSEd";
-        try { if (response.json?.upserted) verb = "Updated"; } catch { /* non-JSON */ }
+        try {
+          const json = response.json as Record<string, unknown> | undefined;
+          if (json?.upserted) verb = "Updated";
+        } catch { /* non-JSON */ }
         new Notice(`${verb} "${title}" on ${destination.name} as ${status}`);
         this.showStatusBarSuccess(destination.name);
         let syndicationUrl: string;
         try {
-          syndicationUrl = response.json?.url ||
+          const json = response.json as Record<string, unknown> | undefined;
+          syndicationUrl = (json?.url as string) ||
             `${destination.url.replace(/\/$/, "")}/${payload.slug as string}`;
         } catch {
           syndicationUrl = `${destination.url.replace(/\/$/, "")}/${payload.slug as string}`;
@@ -529,8 +533,10 @@ export default class PossePublisherPlugin extends Plugin {
         await this.writeSyndication(file, destination.name, syndicationUrl);
       } else {
         let errorDetail: string;
-        try { errorDetail = response.json?.error || String(response.status); }
-        catch { errorDetail = String(response.status); }
+        try {
+          const json = response.json as Record<string, unknown> | undefined;
+          errorDetail = (json?.error as string) || String(response.status);
+        } catch { errorDetail = String(response.status); }
         new Notice(`POSSE to ${destination.name} failed: ${errorDetail}`);
       }
     } catch (err) {
@@ -569,14 +575,17 @@ export default class PossePublisherPlugin extends Plugin {
         body: JSON.stringify({ article }),
       });
       if (response.status >= 200 && response.status < 300) {
-        const articleUrl: string = response.json?.url || "https://dev.to";
+        const json = response.json as Record<string, unknown> | undefined;
+        const articleUrl: string = (json?.url as string) || "https://dev.to";
         new Notice(`POSSEd "${title}" to Dev.to`);
         this.showStatusBarSuccess("Dev.to");
         await this.writeSyndication(file, destination.name, articleUrl);
       } else {
         let errorDetail: string;
-        try { errorDetail = response.json?.error || String(response.status); }
-        catch { errorDetail = String(response.status); }
+        try {
+          const json = response.json as Record<string, unknown> | undefined;
+          errorDetail = (json?.error as string) || String(response.status);
+        } catch { errorDetail = String(response.status); }
         new Notice(`Dev.to POSSE failed: ${errorDetail}`);
       }
     } catch (err) {
@@ -607,14 +616,17 @@ export default class PossePublisherPlugin extends Plugin {
         body: JSON.stringify({ status: statusText, visibility: "public" }),
       });
       if (response.status >= 200 && response.status < 300) {
-        const statusUrl: string = response.json?.url || instanceUrl;
+        const json = response.json as Record<string, unknown> | undefined;
+        const statusUrl: string = (json?.url as string) || instanceUrl;
         new Notice(`POSSEd "${title}" to Mastodon`);
         this.showStatusBarSuccess("Mastodon");
         await this.writeSyndication(file, destination.name, statusUrl);
       } else {
         let errorDetail: string;
-        try { errorDetail = response.json?.error || String(response.status); }
-        catch { errorDetail = String(response.status); }
+        try {
+          const json = response.json as Record<string, unknown> | undefined;
+          errorDetail = (json?.error as string) || String(response.status);
+        } catch { errorDetail = String(response.status); }
         new Notice(`Mastodon POSSE failed: ${errorDetail}`);
       }
     } catch (err) {
@@ -687,7 +699,8 @@ export default class PossePublisherPlugin extends Plugin {
         }),
       });
       if (createResponse.status >= 200 && createResponse.status < 300) {
-        const uri: string = createResponse.json?.uri || "";
+        const createJson = createResponse.json as Record<string, unknown> | undefined;
+        const uri: string = (createJson?.uri as string) || "";
         const postUrl = uri
           ? `https://bsky.app/profile/${destination.handle}/post/${uri.split("/").pop()}`
           : "https://bsky.app";
@@ -696,8 +709,10 @@ export default class PossePublisherPlugin extends Plugin {
         await this.writeSyndication(file, destination.name, postUrl);
       } else {
         let errorDetail: string;
-        try { errorDetail = String(createResponse.json?.message || createResponse.status); }
-        catch { errorDetail = String(createResponse.status); }
+        try {
+          const createJson = createResponse.json as Record<string, unknown> | undefined;
+          errorDetail = String((createJson?.message as string) || createResponse.status);
+        } catch { errorDetail = String(createResponse.status); }
         new Notice(`Bluesky POSSE failed: ${errorDetail}`);
       }
     } catch (err) {
@@ -745,7 +760,7 @@ export default class PossePublisherPlugin extends Plugin {
 
   /** Write a syndication entry back into the note's frontmatter. Updates the URL if the destination already exists. */
   private async writeSyndication(file: TFile, name: string, url: string) {
-    await this.app.fileManager.processFrontMatter(file, (fm) => {
+    await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
       if (!Array.isArray(fm.syndication)) fm.syndication = [];
       const entries = fm.syndication as Array<{ name?: string; url?: string }>;
       const existing = entries.find((s) => s.name === name);
@@ -773,8 +788,9 @@ export default class PossePublisherPlugin extends Plugin {
       return;
     }
     const fileCache = this.app.metadataCache.getFileCache(view.file);
-    const syndication = fileCache?.frontmatter?.syndication;
-    const title = fileCache?.frontmatter?.title || view.file.basename;
+    const fm = fileCache?.frontmatter as Record<string, unknown> | undefined;
+    const syndication: unknown = fm?.syndication;
+    const title = (fm?.title as string) || view.file.basename;
     new PosseStatusModal(this.app, title, syndication).open();
   }
 }
@@ -1178,11 +1194,11 @@ class PossePublisherSettingTab extends PluginSettingTab {
           );
       } else if (destType === "ecency") {
         new Setting(destContainer)
-          .setName("Hive username")
-          .setDesc("Your Hive account name (without @)")
+          .setName("Username")
+          .setDesc("Your account name on https://ecency.com (without @)")
           .addText((text) =>
             text
-              .setPlaceholder("Your Hive username")
+              .setPlaceholder("Your username")
               .setValue(destination.hiveUsername || "")
               .onChange(async (value) => {
                 this.plugin.settings.destinations[index].hiveUsername = value;
@@ -1191,7 +1207,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
           );
         new Setting(destContainer)
           .setName("Posting key")
-          .setDesc("Your Hive private posting key (not the owner or active key)")
+          .setDesc("Your private posting key from https://ecency.com (not the owner or active key)")
           .addText((text) => {
             text
               .setPlaceholder("5k...")
