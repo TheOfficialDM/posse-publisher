@@ -1,5 +1,12 @@
 # Changelog
 
+## Compatibility Notes
+
+### April 2026 — devinmarshall.info `/api/publish` Response Update
+The website's `/api/publish` endpoint now returns a top-level `url` field with the correct canonical path (e.g. `https://devinmarshall.info/content/blog/my-post-slug`). This fixes the syndication URL written back into Obsidian frontmatter, which previously fell back to `{destination.url}/{slug}` — a path that didn't resolve. No plugin-side changes are required; the plugin already reads `response.json.url` when present.
+
+---
+
 ## 2.1.0
 
 **Foundation for multi-platform syndication**
