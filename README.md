@@ -8,6 +8,26 @@ POSSE Publisher brings the [IndieWeb POSSE](https://indieweb.org/POSSE) philosop
 
 ---
 
+## Quick start
+
+1. Open **Settings > POSSE Publisher**.
+2. Enter your **canonical base URL** for your site.
+3. Click **Add destination** and configure one supported destination.
+4. Open a note and add simple frontmatter:
+
+```yaml
+---
+title: My first post
+status: draft
+---
+```
+
+5. Run **POSSE publish** from the command palette or use the ribbon icon.
+
+Start with **Custom API**, **Dev.to**, **Mastodon**, or **Bluesky** for the fastest setup.
+
+---
+
 ## What is POSSE?
 
 POSSE is a publishing strategy from the [IndieWeb](https://indieweb.org) community:
@@ -50,11 +70,11 @@ Copy `main.js`, `manifest.json`, and `styles.css` into your vault's plugins fold
 
 ## Setup
 
-1. Open **Settings → POSSE Publisher**
-2. Enter your **Canonical Base URL** (your own site's root URL)
-3. Click **Add Destination** and configure each platform
-4. Click **Test Connection** to verify API destinations
-5. Start POSSEing!
+1. Open **Settings > POSSE Publisher**.
+2. Enter your **canonical base URL**. This is your site's root URL.
+3. Click **Add destination** and start with one supported platform.
+4. Paste the API key or token for that destination.
+5. Open a note, then run **POSSE publish**.
 
 ---
 
@@ -62,19 +82,19 @@ Copy `main.js`, `manifest.json`, and `styles.css` into your vault's plugins fold
 
 Add as many destinations as you need. Each destination has a `type` that controls how content is formatted and delivered.
 
-| Type | Platform | Auth |
-|------|----------|------|
-| `custom-api` | Your own site's `/api/publish` endpoint | API key (`x-publish-key` header) |
-| `devto` | [Dev.to](https://dev.to) | API key |
-| `mastodon` | Mastodon (any instance) | Access token |
-| `bluesky` | Bluesky (bsky.app) | App password |
-| `medium` | [Medium](https://medium.com) | Integration token *(API archived March 2023 — may be discontinued)* |
-| `reddit` | [Reddit](https://reddit.com) | OAuth2 (client ID + secret + refresh token) |
-| `threads` | [Threads](https://threads.net) | Meta access token |
-| `linkedin` | [LinkedIn](https://linkedin.com) | OAuth2 bearer token |
-| `ecency` | [Ecency](https://ecency.com) (Hive blockchain) | Hive posting key |
+| Type | Platform | Auth | Status |
+|------|----------|------|--------|
+| `custom-api` | Your own site's `/api/publish` endpoint | API key (`x-publish-key` header) | Live |
+| `devto` | [Dev.to](https://dev.to) | API key | Live |
+| `mastodon` | Mastodon (any instance) | Access token | Live |
+| `bluesky` | Bluesky (bsky.app) | App password | Live |
+| `medium` | [Medium](https://medium.com) | Integration token | Coming soon |
+| `reddit` | [Reddit](https://reddit.com) | OAuth2 (client ID + secret + refresh token) | Coming soon |
+| `threads` | [Threads](https://threads.net) | Meta access token | Coming soon |
+| `linkedin` | [LinkedIn](https://linkedin.com) | OAuth2 bearer token | Coming soon |
+| `ecency` | [Ecency](https://ecency.com) (Hive blockchain) | Hive posting key | Coming soon |
 
-> **Note:** Medium, Reddit, Threads, LinkedIn, and Ecency credentials can be pre-configured in settings. Publishing support for these platforms is coming in upcoming releases.
+> **Note:** Start with Custom API, Dev.to, Mastodon, or Bluesky. The other destinations can stay unconfigured until support is live.
 
 - **1 destination** — commands publish directly
 - **2+ destinations** — a picker modal lets you choose the target
@@ -98,7 +118,18 @@ A **ribbon icon** is also available for one-click publishing.
 
 ## Frontmatter
 
-Add YAML frontmatter to control post metadata:
+Use this minimum frontmatter to get started:
+
+```yaml
+---
+title: My post title
+status: draft
+---
+```
+
+Add more fields only when you need them.
+
+Full example:
 
 ```yaml
 ---

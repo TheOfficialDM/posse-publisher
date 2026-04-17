@@ -3,7 +3,7 @@
   "name": "POSSE Publisher",
   "version": "2.1.1",
   "minAppVersion": "0.15.0",
-  "description": "Syndicate your notes to your own site and platforms including Dev.to, Mastodon, and Bluesky using the IndieWeb POSSE pattern. Medium, Reddit, Threads, LinkedIn, and Ecency coming soon.",
+  "description": "Set your site URL, add a destination, and publish to your own site first, then syndicate to Dev.to, Mastodon, and Bluesky.",
   "author": "Devin Marshall",
   "authorUrl": "https://github.com/TheOfficialDM",
   "fundingUrl": "https://github.com/sponsors/TheOfficialDM",
