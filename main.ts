@@ -52,6 +52,8 @@ interface PossePublisherSettings {
   defaultStatus: "draft" | "published";
   confirmBeforePublish: boolean;
   stripObsidianSyntax: boolean;
+  autoPublishOnSave: boolean;
+  autoPublishDestination: string;
 }
 
 const DEFAULT_SETTINGS: PossePublisherSettings = {
@@ -60,6 +62,8 @@ const DEFAULT_SETTINGS: PossePublisherSettings = {
   defaultStatus: "draft",
   confirmBeforePublish: true,
   stripObsidianSyntax: true,
+  autoPublishOnSave: false,
+  autoPublishDestination: "",
 };
 
 interface Frontmatter {
@@ -289,6 +293,8 @@ syndication: []
 export default class PossePublisherPlugin extends Plugin {
   settings: PossePublisherSettings = DEFAULT_SETTINGS;
   private statusBarEl: HTMLElement | null = null;
+  private autoPublishTimer: ReturnType<typeof setTimeout> | null = null;
+  private autoPublishRegistered = false;
 
   async onload() {
     await this.loadSettings();
@@ -347,10 +353,74 @@ export default class PossePublisherPlugin extends Plugin {
     });
 
     this.addSettingTab(new PossePublisherSettingTab(this.app, this));
+
+    this.registerAutoPublish();
   }
 
   onunload() {
     this.statusBarEl = null;
+    if (this.autoPublishTimer) {
+      clearTimeout(this.autoPublishTimer);
+      this.autoPublishTimer = null;
+    }
+  }
+
+  /**
+   * Register (or skip) the vault 'modify' event listener for auto-publish.
+   * Only publishes files that have `status: published` in frontmatter to
+   * avoid accidentally pushing drafts. Debounces saves by 3 seconds so
+   * rapid keystrokes don't trigger multiple API calls.
+   */
+  registerAutoPublish() {
+    if (this.autoPublishRegistered) return;
+    this.autoPublishRegistered = true;
+
+    this.registerEvent(
+      this.app.vault.on("modify", (file) => {
+        if (!this.settings.autoPublishOnSave) return;
+        if (!(file instanceof TFile) || file.extension !== "md") return;
+
+        // Only auto-publish if the note has status: published
+        const cache = this.app.metadataCache.getFileCache(file);
+        const fm = cache?.frontmatter as Record<string, unknown> | undefined;
+        if (!fm || fm.status !== "published") return;
+
+        // Debounce — wait 3s after last save before publishing
+        if (this.autoPublishTimer) clearTimeout(this.autoPublishTimer);
+        this.autoPublishTimer = setTimeout(() => {
+          this.autoPublishTimer = null;
+          void this.autoPublishFile(file);
+        }, 3000);
+      }),
+    );
+  }
+
+  /** Auto-publish a file to the configured destination (no confirmation modal). */
+  private async autoPublishFile(file: TFile) {
+    const dest = this.resolveAutoPublishDestination();
+    if (!dest) return;
+    if (!this.hasValidCredentials(dest)) return;
+
+    const payload = await this.buildPayload(file);
+    // Skip files without a title (likely not real content)
+    if (!payload.title || payload.title === "Untitled") return;
+
+    await this.publishToDestination(dest, payload, file);
+  }
+
+  /** Resolve which destination to use for auto-publish. */
+  private resolveAutoPublishDestination(): Destination | null {
+    const { destinations, autoPublishDestination } = this.settings;
+    if (destinations.length === 0) return null;
+
+    // If a specific destination is named, find it
+    if (autoPublishDestination) {
+      const match = destinations.find((d) => d.name === autoPublishDestination);
+      if (match) return match;
+    }
+
+    // Fallback: first custom-api destination
+    return destinations.find((d) => d.type === "custom-api") || null;
   }
 
   /** Migrate from single-site settings (v1) to multi-site (v2) */
@@ -1344,6 +1414,41 @@ class PossePublisherSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           }),
       );
+
+    new Setting(containerEl).setName("Auto-publish").setHeading();
+
+    new Setting(containerEl)
+      .setName("Auto-publish on save")
+      .setDesc(
+        "Automatically re-publish to your site when you save a note that has status: published in its frontmatter. " +
+        "Drafts are never auto-published. Changes are debounced (3s delay) to avoid rapid-fire requests.",
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.autoPublishOnSave)
+          .onChange(async (value) => {
+            this.plugin.settings.autoPublishOnSave = value;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    const customApiDests = this.plugin.settings.destinations.filter((d) => d.type === "custom-api");
+    if (customApiDests.length > 1) {
+      new Setting(containerEl)
+        .setName("Auto-publish destination")
+        .setDesc("Which custom-api destination to auto-publish to. Leave empty to use the first one.")
+        .addDropdown((dd) => {
+          dd.addOption("", "First custom-api destination");
+          for (const d of customApiDests) {
+            dd.addOption(d.name, d.name);
+          }
+          dd.setValue(this.plugin.settings.autoPublishDestination)
+            .onChange(async (value) => {
+              this.plugin.settings.autoPublishDestination = value;
+              await this.plugin.saveSettings();
+            });
+        });
+    }
 
     /* ── Support section ── */
     new Setting(containerEl).setName("Support").setHeading();

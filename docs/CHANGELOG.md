@@ -7,6 +7,17 @@ The website's `/api/publish` endpoint now returns a top-level `url` field with t
 
 ---
 
+## 2.1.1
+
+**Auto-publish on save**
+
+### New
+- **Auto-publish on save** — when enabled in settings, saving a note with `status: published` in its frontmatter automatically re-publishes it to your site. Drafts are never auto-published. Changes are debounced (3-second delay) to prevent rapid-fire API requests while editing.
+- **Auto-publish destination picker** — when multiple custom-api destinations are configured, a dropdown in settings lets you choose which one receives auto-published updates.
+- New settings: `autoPublishOnSave` (toggle, default: off), `autoPublishDestination` (dropdown, default: first custom-api destination).
+
+---
+
 ## 2.1.0
 
 **Foundation for multi-platform syndication**
