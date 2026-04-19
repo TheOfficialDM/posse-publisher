@@ -489,7 +489,13 @@ export default class PossePublisherPlugin extends Plugin {
     const processedBody = this.settings.stripObsidianSyntax ? preprocessContent(body) : body;
     const title = frontmatter.title || file.basename || "Untitled";
     const slug = frontmatter.slug || toSlug(title);
-    const status = overrideStatus || frontmatter.status || this.settings.defaultStatus;
+    const rawStatus = overrideStatus || frontmatter.status || this.settings.defaultStatus;
+    // Normalize common aliases → canonical API values
+    const status =
+      rawStatus === "publish" ? "published" :
+      rawStatus === "archive" ? "archived" :
+      (["draft", "published", "archived"] as string[]).includes(rawStatus) ? rawStatus :
+      this.settings.defaultStatus;
     const postType = frontmatter.type || "blog";
     // Use frontmatter canonicalUrl override if present; otherwise auto-generate
     const canonicalUrl =
@@ -965,17 +971,11 @@ class PossePublisherSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    new Setting(containerEl).setName("Quick start").setHeading();
-
-    new Setting(containerEl)
-      .setName("How to publish")
-      .setDesc("1. Enter your site URL. 2. Add one destination. 3. Run POSSE publish.");
-
     new Setting(containerEl).setName("Your canonical site").setHeading();
 
     new Setting(containerEl)
       .setName("Canonical base URL")
-      .setDesc("Enter your site root URL. Published posts link back here as the canonical original.")
+      .setDesc("Your own site's root URL. Every published post will include a canonical URL pointing here — the original you own.")
       .addText((text) =>
         text
           .setPlaceholder("https://yoursite.com")
@@ -983,17 +983,13 @@ class PossePublisherSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.plugin.settings.canonicalBaseUrl = value;
             if (value && !value.startsWith("https://") && !value.startsWith("http://localhost")) {
-              new Notice("Warning: canonical base URL should start with https://");
+              new Notice("Warning: canonical base URL should start with HTTPS://");
             }
             await this.plugin.saveSettings();
           }),
       );
 
     new Setting(containerEl).setName("Destinations").setHeading();
-
-    new Setting(containerEl)
-      .setName("Start with one destination")
-      .setDesc("Custom API, Dev.to, Mastodon, and Bluesky are ready now.");
 
     this.plugin.settings.destinations.forEach((destination, index) => {
       const destContainer = containerEl.createDiv({
@@ -1003,7 +999,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
 
       new Setting(destContainer)
         .setName("Destination name")
-        .setDesc("Name shown in the picker and status messages")
+        .setDesc("A label for this destination (e.g. My blog)")
         .addText((text) =>
           text
             .setPlaceholder("My site")
@@ -1016,7 +1012,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
 
       new Setting(destContainer)
         .setName("Type")
-        .setDesc("Choose where this destination publishes")
+        .setDesc("Platform to publish to")
         .addDropdown((dd) =>
           dd
             .addOption("custom-api", "Custom API")
@@ -1041,7 +1037,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
       if (destType === "custom-api") {
         new Setting(destContainer)
           .setName("Site URL")
-          .setDesc("Enter your site base URL. Use https:// for live sites.")
+          .setDesc("Your site's base URL (must start with HTTPS://)")
           .addText((text) =>
             text
               .setPlaceholder("https://example.com")
@@ -1049,14 +1045,14 @@ class PossePublisherSettingTab extends PluginSettingTab {
               .onChange(async (value) => {
                 this.plugin.settings.destinations[index].url = value;
                 if (value && !value.startsWith("https://") && !value.startsWith("http://localhost")) {
-                  new Notice("Warning: destination URL should start with https://");
+                  new Notice("Warning: destination URL should start with HTTPS://");
                 }
                 await this.plugin.saveSettings();
               }),
           );
         new Setting(destContainer)
           .setName("API key")
-          .setDesc("Paste the PUBLISH_API_KEY from your site")
+          .setDesc("`PUBLISH_API_KEY` from your site's environment")
           .addText((text) => {
             text
               .setPlaceholder("Enter API key")
@@ -1098,7 +1094,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
           );
         new Setting(destContainer)
           .setName("Access token")
-          .setDesc("Create a new app in Mastodon settings > development")
+          .setDesc("From your mastodon account: settings → development → new application")
           .addText((text) => {
             text
               .setPlaceholder("Enter access token")
@@ -1140,7 +1136,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
       } else if (destType === "medium") {
         new Setting(destContainer)
           .setName("API notice")
-          .setDesc("Medium API was archived in March 2023 and may stop working.");
+          .setDesc("The medium API was archived in march 2023. It may still work but could be discontinued at any time.");
         new Setting(destContainer)
           .setName("Integration token")
           .setDesc("From medium.com → settings → security and apps → integration tokens")
@@ -1170,7 +1166,6 @@ class PossePublisherSettingTab extends PluginSettingTab {
           );
         new Setting(destContainer)
           .setName("Client secret")
-          .setDesc("From the same Reddit app")
           .addText((text) => {
             text
               .setPlaceholder("Client secret")
@@ -1184,7 +1179,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
           });
         new Setting(destContainer)
           .setName("Refresh token")
-          .setDesc("Paste the refresh token for this Reddit account")
+          .setDesc("Authorization refresh token for your Reddit account")
           .addText((text) => {
             text
               .setPlaceholder("Refresh token")
@@ -1209,7 +1204,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
           );
         new Setting(destContainer)
           .setName("Default subreddit")
-          .setDesc("Optional. Example: r/webdev")
+          .setDesc("e.g. r/webdev — can be overridden per note with \"subreddit:\" frontmatter")
           .addText((text) =>
             text
               .setPlaceholder("R/subredditname")
@@ -1222,7 +1217,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
       } else if (destType === "threads") {
         new Setting(destContainer)
           .setName("Threads user ID")
-          .setDesc("Your numeric Threads user ID")
+          .setDesc("Your numeric threads/instagram user ID")
           .addText((text) =>
             text
               .setPlaceholder("123456789")
@@ -1234,7 +1229,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
           );
         new Setting(destContainer)
           .setName("Access token")
-          .setDesc("Paste your long-lived Threads token")
+          .setDesc("Long-lived threads access token with threads_content_publish permission")
           .addText((text) => {
             text
               .setPlaceholder("Enter access token")
@@ -1249,7 +1244,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
       } else if (destType === "linkedin") {
         new Setting(destContainer)
           .setName("Access token")
-          .setDesc("Paste a LinkedIn token with w_member_social scope")
+          .setDesc("Authorization bearer token with w_member_social scope")
           .addText((text) => {
             text
               .setPlaceholder("Enter access token")
@@ -1263,10 +1258,10 @@ class PossePublisherSettingTab extends PluginSettingTab {
           });
         new Setting(destContainer)
           .setName("Person identifier")
-          .setDesc("Paste your LinkedIn person ID")
+          .setDesc("Your LinkedIn member identifier")
           .addText((text) =>
             text
-              .setPlaceholder("LinkedIn person ID")
+              .setPlaceholder("Urn:li:person:...")
               .setValue(destination.linkedinPersonUrn || "")
               .onChange(async (value) => {
                 this.plugin.settings.destinations[index].linkedinPersonUrn = value;
@@ -1276,7 +1271,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
       } else if (destType === "ecency") {
         new Setting(destContainer)
           .setName("Username")
-          .setDesc("Enter your ecency username without the @")
+          .setDesc("Your account name on https://ecency.com (without @)")
           .addText((text) =>
             text
               .setPlaceholder("Your username")
@@ -1288,7 +1283,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
           );
         new Setting(destContainer)
           .setName("Posting key")
-          .setDesc("Paste your ecency posting key")
+          .setDesc("Your private posting key from https://ecency.com (not the owner or active key)")
           .addText((text) => {
             text
               .setPlaceholder("5k...")
@@ -1402,7 +1397,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Confirm before publishing")
-      .setDesc("Review the title, slug, status, and type before publishing")
+      .setDesc("Show a confirmation modal with post details before publishing")
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.confirmBeforePublish)
@@ -1430,7 +1425,10 @@ class PossePublisherSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Auto-publish on save")
-      .setDesc("Re-publish automatically on save when the note status is published.")
+      .setDesc(
+        "Automatically re-publish to your site when you save a note that has status: published in its frontmatter. " +
+        "Drafts are never auto-published. Changes are debounced (3s delay) to avoid rapid-fire requests.",
+      )
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.autoPublishOnSave)
