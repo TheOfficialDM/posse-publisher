@@ -488,7 +488,7 @@ export default class PossePublisherPlugin extends Plugin {
     const body = extractBody(content);
     const processedBody = this.settings.stripObsidianSyntax ? preprocessContent(body) : body;
     const title = frontmatter.title || file.basename || "Untitled";
-    const slug = frontmatter.slug || toSlug(title);
+    const slug = toSlug(frontmatter.slug || title);
     const rawStatus = overrideStatus || frontmatter.status || this.settings.defaultStatus;
     // Normalize common aliases → canonical API values
     const status =
@@ -589,6 +589,7 @@ export default class PossePublisherPlugin extends Plugin {
           "x-publish-key": destination.apiKey,
         },
         body: JSON.stringify(payload),
+        throw: false,
       });
       if (response.status >= 200 && response.status < 300) {
         let verb = "POSSEd";
@@ -649,6 +650,7 @@ export default class PossePublisherPlugin extends Plugin {
           "api-key": destination.apiKey,
         },
         body: JSON.stringify({ article }),
+        throw: false,
       });
       if (response.status >= 200 && response.status < 300) {
         const json = response.json as Record<string, unknown> | undefined;
@@ -690,6 +692,7 @@ export default class PossePublisherPlugin extends Plugin {
           "Authorization": `Bearer ${destination.accessToken}`,
         },
         body: JSON.stringify({ status: statusText, visibility: "public" }),
+        throw: false,
       });
       if (response.status >= 200 && response.status < 300) {
         const json = response.json as Record<string, unknown> | undefined;
@@ -729,6 +732,7 @@ export default class PossePublisherPlugin extends Plugin {
           identifier: destination.handle,
           password: destination.appPassword,
         }),
+        throw: false,
       });
       if (authResponse.status < 200 || authResponse.status >= 300) {
         new Notice(`Bluesky auth failed: ${authResponse.status}`);
@@ -773,6 +777,7 @@ export default class PossePublisherPlugin extends Plugin {
           collection: "app.bsky.feed.post",
           record: postRecord,
         }),
+        throw: false,
       });
       if (createResponse.status >= 200 && createResponse.status < 300) {
         const createJson = createResponse.json as Record<string, unknown> | undefined;
@@ -1322,6 +1327,7 @@ class PossePublisherSettingTab extends PluginSettingTab {
                 url,
                 method: "OPTIONS",
                 headers: { "x-publish-key": destination.apiKey },
+                throw: false,
               }).then((response) => {
                 if (response.status >= 200 && response.status < 400) {
                   new Notice(`Connection to ${destination.name || destination.url} successful`);
