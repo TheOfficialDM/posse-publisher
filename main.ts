@@ -496,7 +496,8 @@ export default class PossePublisherPlugin extends Plugin {
       rawStatus === "archive" ? "archived" :
       (["draft", "published", "archived"] as string[]).includes(rawStatus) ? rawStatus :
       this.settings.defaultStatus;
-    const postType = frontmatter.type || "blog";
+    const VALID_TYPES = ["blog", "vlog", "media", "note", "reply", "bookmark", "repost", "like", "rsvp"];
+    const postType = (frontmatter.type && VALID_TYPES.includes(frontmatter.type)) ? frontmatter.type : "blog";
     // Use frontmatter canonicalUrl override if present; otherwise auto-generate
     const canonicalUrl =
       frontmatter.canonicalUrl ||
@@ -612,11 +613,13 @@ export default class PossePublisherPlugin extends Plugin {
         let errorDetail: string;
         try {
           const json = response.json as Record<string, unknown> | undefined;
+          console.error("[posse-publisher] publish failed", response.status, json);
           errorDetail = (json?.error as string) || String(response.status);
         } catch { errorDetail = String(response.status); }
         new Notice(`POSSE to ${destination.name} failed: ${errorDetail}`);
       }
     } catch (err) {
+      console.error("[posse-publisher] publish error", err);
       new Notice(`POSSE error (${destination.name}): ${err instanceof Error ? err.message : "Unknown error"}`);
     }
   }
